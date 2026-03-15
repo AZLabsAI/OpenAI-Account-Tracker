@@ -95,4 +95,8 @@ export interface Account {
   codexAssignedTo?: CodexAgent[];
   /** Which ChatGPT client devices this account is assigned to (can be multiple) */
   chatgptAssignedTo?: ChatGPTAgent[];
+  /** Pinned accounts stay at the top in pin order — independent of starred */
+  pinned?: boolean;
+  /** Ascending integer — lower = higher in the pinned list */
+  pinOrder?: number;
 }

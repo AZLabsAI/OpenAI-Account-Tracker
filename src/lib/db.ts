@@ -24,6 +24,8 @@ export function getDb(): Database.Database {
       usageLimits       TEXT NOT NULL DEFAULT '[]',
       starred           INTEGER NOT NULL DEFAULT 0,
       inUse             INTEGER NOT NULL DEFAULT 0,
+      pinned            INTEGER NOT NULL DEFAULT 0,
+      pinOrder          INTEGER NOT NULL DEFAULT 0,
       notes             TEXT,
       lastChecked       TEXT,
       avatarUrl         TEXT,
@@ -33,18 +35,25 @@ export function getDb(): Database.Database {
     )
   `);
 
+  // Add pinned/pinOrder columns if upgrading from an older DB
+  const cols = (_db.prepare("PRAGMA table_info(accounts)").all() as { name: string }[]).map((c) => c.name);
+  if (!cols.includes("pinned"))   _db.exec("ALTER TABLE accounts ADD COLUMN pinned   INTEGER NOT NULL DEFAULT 0");
+  if (!cols.includes("pinOrder")) _db.exec("ALTER TABLE accounts ADD COLUMN pinOrder INTEGER NOT NULL DEFAULT 0");
+
   // Seed from accounts.ts if the table is empty
   const count = (_db.prepare("SELECT COUNT(*) as n FROM accounts").get() as { n: number }).n;
   if (count === 0) {
     const insert = _db.prepare(`
       INSERT INTO accounts (
         id, name, email, subscription, expirationDate,
-        usageLimits, starred, inUse, notes, lastChecked,
-        avatarUrl, accountType, codexAssignedTo, chatgptAssignedTo
+        usageLimits, starred, inUse, pinned, pinOrder,
+        notes, lastChecked, avatarUrl, accountType,
+        codexAssignedTo, chatgptAssignedTo
       ) VALUES (
         @id, @name, @email, @subscription, @expirationDate,
-        @usageLimits, @starred, @inUse, @notes, @lastChecked,
-        @avatarUrl, @accountType, @codexAssignedTo, @chatgptAssignedTo
+        @usageLimits, @starred, @inUse, @pinned, @pinOrder,
+        @notes, @lastChecked, @avatarUrl, @accountType,
+        @codexAssignedTo, @chatgptAssignedTo
       )
     `);
     const insertMany = _db.transaction((accs: Account[]) => {
@@ -56,13 +65,15 @@ export function getDb(): Database.Database {
           subscription:      a.subscription,
           expirationDate:    a.expirationDate,
           usageLimits:       JSON.stringify(a.usageLimits ?? []),
-          starred:           a.starred ? 1 : 0,
-          inUse:             a.inUse ? 1 : 0,
-          notes:             a.notes ?? null,
-          lastChecked:       a.lastChecked ?? null,
-          avatarUrl:         a.avatarUrl ?? null,
-          accountType:       a.accountType ?? null,
-          codexAssignedTo:   JSON.stringify(a.codexAssignedTo ?? []),
+          starred:           a.starred   ? 1 : 0,
+          inUse:             a.inUse     ? 1 : 0,
+          pinned:            a.pinned    ? 1 : 0,
+          pinOrder:          a.pinOrder  ?? 0,
+          notes:             a.notes     ?? null,
+          lastChecked:       a.lastChecked  ?? null,
+          avatarUrl:         a.avatarUrl    ?? null,
+          accountType:       a.accountType  ?? null,
+          codexAssignedTo:   JSON.stringify(a.codexAssignedTo   ?? []),
           chatgptAssignedTo: JSON.stringify(a.chatgptAssignedTo ?? []),
         });
       }
@@ -84,11 +95,13 @@ function rowToAccount(row: Record<string, unknown>): Account {
     usageLimits:       JSON.parse(row.usageLimits as string),
     starred:           Boolean(row.starred),
     inUse:             Boolean(row.inUse),
-    notes:             (row.notes as string) ?? undefined,
+    pinned:            Boolean(row.pinned),
+    pinOrder:          (row.pinOrder as number) ?? 0,
+    notes:             (row.notes     as string) ?? undefined,
     lastChecked:       (row.lastChecked as string) ?? undefined,
-    avatarUrl:         (row.avatarUrl as string) ?? undefined,
+    avatarUrl:         (row.avatarUrl  as string) ?? undefined,
     accountType:       (row.accountType as Account["accountType"]) ?? undefined,
-    codexAssignedTo:   JSON.parse(row.codexAssignedTo as string),
+    codexAssignedTo:   JSON.parse(row.codexAssignedTo   as string),
     chatgptAssignedTo: JSON.parse(row.chatgptAssignedTo as string),
   };
 }
@@ -105,13 +118,15 @@ export function updateAccount(id: string, patch: Partial<Account>): Account | nu
   const fields: string[] = [];
   const values: Record<string, unknown> = { id };
 
-  if (patch.starred       !== undefined) { fields.push("starred = @starred");             values.starred           = patch.starred ? 1 : 0; }
-  if (patch.inUse         !== undefined) { fields.push("inUse = @inUse");                 values.inUse             = patch.inUse ? 1 : 0; }
-  if (patch.accountType   !== undefined) { fields.push("accountType = @accountType");     values.accountType       = patch.accountType ?? null; }
-  if (patch.codexAssignedTo   !== undefined) { fields.push("codexAssignedTo = @codexAssignedTo");     values.codexAssignedTo   = JSON.stringify(patch.codexAssignedTo); }
-  if (patch.chatgptAssignedTo !== undefined) { fields.push("chatgptAssignedTo = @chatgptAssignedTo"); values.chatgptAssignedTo = JSON.stringify(patch.chatgptAssignedTo); }
-  if (patch.notes         !== undefined) { fields.push("notes = @notes");                 values.notes             = patch.notes ?? null; }
-  if (patch.lastChecked   !== undefined) { fields.push("lastChecked = @lastChecked");     values.lastChecked       = patch.lastChecked ?? null; }
+  if (patch.starred            !== undefined) { fields.push("starred = @starred");                       values.starred           = patch.starred ? 1 : 0; }
+  if (patch.inUse              !== undefined) { fields.push("inUse = @inUse");                           values.inUse             = patch.inUse ? 1 : 0; }
+  if (patch.pinned             !== undefined) { fields.push("pinned = @pinned");                         values.pinned            = patch.pinned ? 1 : 0; }
+  if (patch.pinOrder           !== undefined) { fields.push("pinOrder = @pinOrder");                     values.pinOrder          = patch.pinOrder; }
+  if (patch.accountType        !== undefined) { fields.push("accountType = @accountType");               values.accountType       = patch.accountType ?? null; }
+  if (patch.codexAssignedTo    !== undefined) { fields.push("codexAssignedTo = @codexAssignedTo");       values.codexAssignedTo   = JSON.stringify(patch.codexAssignedTo); }
+  if (patch.chatgptAssignedTo  !== undefined) { fields.push("chatgptAssignedTo = @chatgptAssignedTo");   values.chatgptAssignedTo = JSON.stringify(patch.chatgptAssignedTo); }
+  if (patch.notes              !== undefined) { fields.push("notes = @notes");                           values.notes             = patch.notes ?? null; }
+  if (patch.lastChecked        !== undefined) { fields.push("lastChecked = @lastChecked");               values.lastChecked       = patch.lastChecked ?? null; }
 
   if (fields.length === 0) return null;
 
@@ -119,4 +134,17 @@ export function updateAccount(id: string, patch: Partial<Account>): Account | nu
 
   const row = db.prepare("SELECT * FROM accounts WHERE id = @id").get({ id }) as Record<string, unknown> | undefined;
   return row ? rowToAccount(row) : null;
+}
+
+/** Returns the next available pinOrder value */
+export function nextPinOrder(): number {
+  const db = getDb();
+  const row = db.prepare("SELECT MAX(pinOrder) as max FROM accounts WHERE pinned = 1").get() as { max: number | null };
+  return (row.max ?? 0) + 1;
+}
+
+export function deleteAccount(id: string): boolean {
+  const db = getDb();
+  const result = db.prepare("DELETE FROM accounts WHERE id = @id").run({ id });
+  return result.changes > 0;
 }

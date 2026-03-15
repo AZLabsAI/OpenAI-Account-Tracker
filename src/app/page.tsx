@@ -50,6 +50,37 @@ export default function Home() {
     );
   }, []);
 
+  const togglePin = useCallback((id: string) => {
+    setAccounts((prev) => {
+      const account = prev.find((a) => a.id === id);
+      if (!account) return prev;
+
+      const isPinning = !account.pinned;
+      let nextOrder = 0;
+
+      if (isPinning) {
+        // Assign the next pinOrder after all currently pinned accounts
+        const maxPinOrder = prev
+          .filter((a) => a.pinned)
+          .reduce((max, a) => Math.max(max, a.pinOrder ?? 0), 0);
+        nextOrder = maxPinOrder + 1;
+      }
+
+      return prev.map((a) => {
+        if (a.id !== id) return a;
+        const updated = { ...a, pinned: isPinning, pinOrder: isPinning ? nextOrder : 0 };
+        persist(id, { pinned: updated.pinned, pinOrder: updated.pinOrder });
+        return updated;
+      });
+    });
+  }, []);
+
+  const deleteAccount = useCallback((id: string) => {
+    fetch(`/api/accounts/${id}`, { method: "DELETE" }).then(() => {
+      setAccounts((prev) => prev.filter((a) => a.id !== id));
+    });
+  }, []);
+
   const assignCodexAgent = useCallback((id: string, agents: CodexAgent[]) => {
     setAccounts((prev) =>
       prev.map((a) => {
@@ -125,7 +156,7 @@ export default function Home() {
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-semibold text-zinc-100">Accounts</h2>
                 <p className="text-xs text-zinc-600">
-                  Click ☆ to star · Click &ldquo;Mark In Use&rdquo; for active sessions
+                  Click ☆ to star · Click 📌 to pin · Click &ldquo;Mark In Use&rdquo; for active sessions
                 </p>
               </div>
 
@@ -141,6 +172,8 @@ export default function Home() {
                       account={account}
                       onToggleStar={toggleStar}
                       onToggleInUse={toggleInUse}
+                      onTogglePin={togglePin}
+                      onDelete={deleteAccount}
                       onAssignCodex={assignCodexAgent}
                       onAssignChatGPT={assignChatGPTAgent}
                       onSetAccountType={setAccountType}
