@@ -280,9 +280,8 @@ export function AccountCard({ account, onToggleStar, onToggleInUse, onAssignCode
         </>
       )}
 
-      {/* Account Type */}
+      {/* Account Type — replaces the notes pill */}
       <div className="mt-4">
-        <span className="text-zinc-500 text-xs">Account Type</span>
         <select
           value={account.accountType ?? ""}
           onChange={(e) =>
@@ -291,27 +290,20 @@ export function AccountCard({ account, onToggleStar, onToggleInUse, onAssignCode
               e.target.value ? (e.target.value as AccountType) : undefined,
             )
           }
-          className="mt-0.5 block w-fit rounded-md border border-zinc-700/60 bg-zinc-800/70 px-2 py-1 text-[13px] font-medium text-zinc-200 outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500/30 transition-colors appearance-none cursor-pointer"
+          className="block w-fit rounded-lg bg-zinc-800/40 px-3 py-2 text-xs text-zinc-500 border-0 outline-none hover:bg-zinc-800/60 focus:bg-zinc-800/60 transition-colors appearance-none cursor-pointer"
           style={{
             backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2371717a' d='M3 4.5L6 8l3-3.5H3z'/%3E%3C/svg%3E")`,
             backgroundRepeat: "no-repeat",
-            backgroundPosition: "right 6px center",
+            backgroundPosition: "right 8px center",
             paddingRight: "24px",
           }}
         >
-          <option value="">— Select type —</option>
+          <option value="">— Account type —</option>
           {ACCOUNT_TYPES.map((t) => (
             <option key={t} value={t}>{t}</option>
           ))}
         </select>
       </div>
-
-      {/* Notes (free-form, if any) */}
-      {account.notes && (
-        <div className="mt-4 rounded-lg bg-zinc-800/40 px-3 py-2 text-xs text-zinc-500">
-          {account.notes}
-        </div>
-      )}
 
       {/* Bottom action bar */}
       <div className="mt-4 pt-3 border-t border-zinc-800/50 flex items-center justify-between">

@@ -47,12 +47,13 @@ export const CHATGPT_AGENTS: ChatGPTAgent[] = [
   "ChatGPT on Work-PC",
 ];
 
-export type AccountType = "Primary account" | "Personal account" | "Work account";
+export type AccountType = "Primary account" | "Personal account" | "Work account" | "Business account";
 
 export const ACCOUNT_TYPES: AccountType[] = [
   "Primary account",
   "Personal account",
   "Work account",
+  "Business account",
 ];
 
 export interface UsageLimit {
