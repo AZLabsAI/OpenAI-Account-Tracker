@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Account, CODEX_AGENTS, CHATGPT_AGENTS, CodexAgent, ChatGPTAgent, ACCOUNT_TYPES, AccountType } from "@/types";
+import { useState, useCallback } from "react";
+import { Account, CODEX_AGENTS, CHATGPT_AGENTS, CodexAgent, ChatGPTAgent, ACCOUNT_TYPES, AccountType, QuotaData } from "@/types";
 import { getAccountStatus, formatDate, daysUntilExpiration } from "@/data/accounts";
 import { StatusBadge } from "./StatusBadge";
-import { UsageBar } from "./UsageBar";
+import { UsageBar, QuotaBar } from "./UsageBar";
 
 interface Props {
   account: Account;
@@ -15,7 +15,11 @@ interface Props {
   onAssignCodex: (id: string, agents: CodexAgent[]) => void;
   onAssignChatGPT: (id: string, agents: ChatGPTAgent[]) => void;
   onSetAccountType: (id: string, type: AccountType | undefined) => void;
+  onQuotaUpdated: (id: string, quotaData: QuotaData) => void;
 }
+
+type LoginState = "idle" | "waiting" | "success" | "error";
+type QuotaState = "idle" | "loading" | "error";
 
 export function AccountCard({
   account,
@@ -26,9 +30,16 @@ export function AccountCard({
   onAssignCodex,
   onAssignChatGPT,
   onSetAccountType,
+  onQuotaUpdated,
 }: Props) {
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const [loginState, setLoginState] = useState<LoginState>("idle");
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  const [quotaState, setQuotaState] = useState<QuotaState>("idle");
+  const [quotaError, setQuotaError] = useState<string | null>(null);
 
   const status = getAccountStatus(account);
   const daysLeft = daysUntilExpiration(account.expirationDate);
@@ -42,8 +53,61 @@ export function AccountCard({
   const isStarred = account.starred;
   const isInUse = account.inUse;
   const isPinned = account.pinned;
+  const hasCodexHome = Boolean(account.codexHomePath);
+  const hasQuota = Boolean(account.quotaData);
 
   const dropdownArrow = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2371717a' d='M3 4.5L6 8l3-3.5H3z'/%3E%3C/svg%3E")`;
+
+  // ── Sign In (OAuth login) ──────────────────────────────────────────────────
+  const handleSignIn = useCallback(async () => {
+    setLoginState("waiting");
+    setLoginError(null);
+    try {
+      const res = await fetch(`/api/accounts/${account.id}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+        // Long timeout — user needs to complete browser auth
+        signal: AbortSignal.timeout(6 * 60 * 1000),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setLoginState("success");
+        if (data.quotaData) onQuotaUpdated(account.id, data.quotaData);
+        // Reset back to idle after 3 s
+        setTimeout(() => setLoginState("idle"), 3000);
+      } else {
+        setLoginState("error");
+        setLoginError(data.error ?? "Sign in failed");
+      }
+    } catch (err) {
+      setLoginState("error");
+      setLoginError(err instanceof Error ? err.message : "Sign in failed");
+    }
+  }, [account.id, onQuotaUpdated]);
+
+  // ── Refresh Quota ─────────────────────────────────────────────────────────
+  const handleRefreshQuota = useCallback(async () => {
+    setQuotaState("loading");
+    setQuotaError(null);
+    try {
+      const res = await fetch(`/api/accounts/${account.id}/quota`, {
+        method: "POST",
+        signal: AbortSignal.timeout(30_000),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setQuotaState("idle");
+        onQuotaUpdated(account.id, data as QuotaData);
+      } else {
+        setQuotaState("error");
+        setQuotaError(data.error ?? "Quota fetch failed");
+      }
+    } catch (err) {
+      setQuotaState("error");
+      setQuotaError(err instanceof Error ? err.message : "Quota fetch failed");
+    }
+  }, [account.id, onQuotaUpdated]);
 
   return (
     <>
@@ -282,7 +346,7 @@ export function AccountCard({
           )}
         </div>
 
-        {/* Usage limits */}
+        {/* Static usage limits (manual) */}
         {account.usageLimits.length > 0 && (
           <>
             <div className="my-4 h-px bg-zinc-800/80" />
@@ -293,6 +357,19 @@ export function AccountCard({
               ))}
             </div>
           </>
+        )}
+
+        {/* Live quota data */}
+        {account.quotaData && (
+          <>
+            <div className="my-4 h-px bg-zinc-800/80" />
+            <QuotaBar quotaData={account.quotaData} />
+          </>
+        )}
+
+        {/* Quota error inline */}
+        {quotaState === "error" && quotaError && (
+          <p className="mt-2 text-[11px] text-red-400">{quotaError}</p>
         )}
 
         {/* Account Type */}
@@ -311,7 +388,8 @@ export function AccountCard({
         </div>
 
         {/* Bottom action bar */}
-        <div className="mt-4 pt-3 border-t border-zinc-800/50 flex items-center justify-between">
+        <div className="mt-4 pt-3 border-t border-zinc-800/50 flex items-center justify-between gap-2">
+          {/* Left: Mark In Use */}
           <button
             onClick={() => onToggleInUse(account.id)}
             className={`text-xs font-medium rounded-md px-2.5 py-1 transition-colors ${
@@ -322,15 +400,123 @@ export function AccountCard({
           >
             {isInUse ? "✓ In Use" : "Mark In Use"}
           </button>
-          <button
-            className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors rounded-md px-2 py-1 hover:bg-zinc-800/60"
-            title="Check quota (coming soon)"
-            disabled
-          >
-            Refresh quota
-          </button>
+
+          {/* Right: Sign In + Refresh Quota */}
+          <div className="flex items-center gap-2">
+            {/* Sign In button — always visible unless login is in progress */}
+            <SignInButton
+              state={loginState}
+              error={loginError}
+              hasCodexHome={hasCodexHome}
+              onClick={handleSignIn}
+            />
+
+            {/* Refresh Quota — only shown once signed in */}
+            {hasCodexHome && (
+              <RefreshQuotaButton
+                state={quotaState}
+                hasQuota={hasQuota}
+                onClick={handleRefreshQuota}
+              />
+            )}
+          </div>
         </div>
+
+        {/* Login error inline */}
+        {loginState === "error" && loginError && (
+          <p className="mt-2 text-[11px] text-red-400 leading-snug">{loginError}</p>
+        )}
       </div>
     </>
+  );
+}
+
+// ─── Sign In Button ───────────────────────────────────────────────────────────
+
+function SignInButton({
+  state,
+  error,
+  hasCodexHome,
+  onClick,
+}: {
+  state: LoginState;
+  error: string | null;
+  hasCodexHome: boolean;
+  onClick: () => void;
+}) {
+  if (state === "waiting") {
+    return (
+      <span className="flex items-center gap-1.5 text-xs text-zinc-400">
+        <span className="inline-block h-3 w-3 animate-spin rounded-full border border-zinc-600 border-t-zinc-300" />
+        Waiting for browser…
+      </span>
+    );
+  }
+
+  if (state === "success") {
+    return (
+      <span className="flex items-center gap-1 text-xs text-emerald-400 font-medium">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+          <path fillRule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clipRule="evenodd" />
+        </svg>
+        Signed in
+      </span>
+    );
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1.5 text-xs font-medium rounded-md px-2.5 py-1 transition-colors ${
+        hasCodexHome
+          ? "bg-zinc-800/60 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/60"
+          : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20"
+      }`}
+      title={hasCodexHome ? "Re-authenticate this account" : "Sign in to enable live quota tracking"}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+        <path fillRule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14Zm.75-10.25a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z" clipRule="evenodd" />
+      </svg>
+      {hasCodexHome ? "Re-auth" : "Sign In"}
+    </button>
+  );
+}
+
+// ─── Refresh Quota Button ─────────────────────────────────────────────────────
+
+function RefreshQuotaButton({
+  state,
+  hasQuota,
+  onClick,
+}: {
+  state: QuotaState;
+  hasQuota: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={state === "loading"}
+      className={`flex items-center gap-1.5 text-xs font-medium rounded-md px-2.5 py-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+        hasQuota
+          ? "bg-zinc-800/60 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/60"
+          : "bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 border border-sky-500/20"
+      }`}
+      title="Fetch live quota from Codex"
+    >
+      {state === "loading" ? (
+        <>
+          <span className="inline-block h-3 w-3 animate-spin rounded-full border border-zinc-600 border-t-zinc-300" />
+          Fetching…
+        </>
+      ) : (
+        <>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+            <path fillRule="evenodd" d="M13.836 2.477a.75.75 0 0 1 .75.75v3.182a.75.75 0 0 1-.75.75h-3.182a.75.75 0 0 1 0-1.5h1.37l-.84-.841a4.5 4.5 0 0 0-7.08.932.75.75 0 0 1-1.3-.75 6 6 0 0 1 9.44-1.242l.842.84V3.227a.75.75 0 0 1 .75-.75Zm-.911 7.5A.75.75 0 0 1 13.199 11a6 6 0 0 1-9.44 1.241l-.84-.84v1.371a.75.75 0 0 1-1.5 0V9.591a.75.75 0 0 1 .75-.75H5.35a.75.75 0 0 1 0 1.5H3.98l.841.841a4.5 4.5 0 0 0 7.08-.932.75.75 0 0 1 1.024-.273Z" clipRule="evenodd" />
+          </svg>
+          {hasQuota ? "Refresh" : "Get Quota"}
+        </>
+      )}
+    </button>
   );
 }

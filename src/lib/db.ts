@@ -31,14 +31,18 @@ export function getDb(): Database.Database {
       avatarUrl         TEXT,
       accountType       TEXT,
       codexAssignedTo   TEXT NOT NULL DEFAULT '[]',
-      chatgptAssignedTo TEXT NOT NULL DEFAULT '[]'
+      chatgptAssignedTo TEXT NOT NULL DEFAULT '[]',
+      codexHomePath     TEXT,
+      quotaData         TEXT
     )
   `);
 
-  // Add pinned/pinOrder columns if upgrading from an older DB
+  // Migrate older DBs that are missing newer columns
   const cols = (_db.prepare("PRAGMA table_info(accounts)").all() as { name: string }[]).map((c) => c.name);
-  if (!cols.includes("pinned"))   _db.exec("ALTER TABLE accounts ADD COLUMN pinned   INTEGER NOT NULL DEFAULT 0");
-  if (!cols.includes("pinOrder")) _db.exec("ALTER TABLE accounts ADD COLUMN pinOrder INTEGER NOT NULL DEFAULT 0");
+  if (!cols.includes("pinned"))        _db.exec("ALTER TABLE accounts ADD COLUMN pinned        INTEGER NOT NULL DEFAULT 0");
+  if (!cols.includes("pinOrder"))      _db.exec("ALTER TABLE accounts ADD COLUMN pinOrder      INTEGER NOT NULL DEFAULT 0");
+  if (!cols.includes("codexHomePath")) _db.exec("ALTER TABLE accounts ADD COLUMN codexHomePath TEXT");
+  if (!cols.includes("quotaData"))     _db.exec("ALTER TABLE accounts ADD COLUMN quotaData     TEXT");
 
   // Seed from accounts.ts if the table is empty
   const count = (_db.prepare("SELECT COUNT(*) as n FROM accounts").get() as { n: number }).n;
@@ -48,12 +52,14 @@ export function getDb(): Database.Database {
         id, name, email, subscription, expirationDate,
         usageLimits, starred, inUse, pinned, pinOrder,
         notes, lastChecked, avatarUrl, accountType,
-        codexAssignedTo, chatgptAssignedTo
+        codexAssignedTo, chatgptAssignedTo,
+        codexHomePath, quotaData
       ) VALUES (
         @id, @name, @email, @subscription, @expirationDate,
         @usageLimits, @starred, @inUse, @pinned, @pinOrder,
         @notes, @lastChecked, @avatarUrl, @accountType,
-        @codexAssignedTo, @chatgptAssignedTo
+        @codexAssignedTo, @chatgptAssignedTo,
+        @codexHomePath, @quotaData
       )
     `);
     const insertMany = _db.transaction((accs: Account[]) => {
@@ -75,6 +81,8 @@ export function getDb(): Database.Database {
           accountType:       a.accountType  ?? null,
           codexAssignedTo:   JSON.stringify(a.codexAssignedTo   ?? []),
           chatgptAssignedTo: JSON.stringify(a.chatgptAssignedTo ?? []),
+          codexHomePath:     a.codexHomePath ?? null,
+          quotaData:         a.quotaData ? JSON.stringify(a.quotaData) : null,
         });
       }
     });
@@ -103,6 +111,8 @@ function rowToAccount(row: Record<string, unknown>): Account {
     accountType:       (row.accountType as Account["accountType"]) ?? undefined,
     codexAssignedTo:   JSON.parse(row.codexAssignedTo   as string),
     chatgptAssignedTo: JSON.parse(row.chatgptAssignedTo as string),
+    codexHomePath:     (row.codexHomePath as string) ?? undefined,
+    quotaData:         row.quotaData ? JSON.parse(row.quotaData as string) : undefined,
   };
 }
 
@@ -110,6 +120,12 @@ export function getAllAccounts(): Account[] {
   const db = getDb();
   const rows = db.prepare("SELECT * FROM accounts").all() as Record<string, unknown>[];
   return rows.map(rowToAccount);
+}
+
+export function getAccount(id: string): Account | null {
+  const db = getDb();
+  const row = db.prepare("SELECT * FROM accounts WHERE id = @id").get({ id }) as Record<string, unknown> | undefined;
+  return row ? rowToAccount(row) : null;
 }
 
 export function updateAccount(id: string, patch: Partial<Account>): Account | null {
@@ -127,6 +143,8 @@ export function updateAccount(id: string, patch: Partial<Account>): Account | nu
   if (patch.chatgptAssignedTo  !== undefined) { fields.push("chatgptAssignedTo = @chatgptAssignedTo");   values.chatgptAssignedTo = JSON.stringify(patch.chatgptAssignedTo); }
   if (patch.notes              !== undefined) { fields.push("notes = @notes");                           values.notes             = patch.notes ?? null; }
   if (patch.lastChecked        !== undefined) { fields.push("lastChecked = @lastChecked");               values.lastChecked       = patch.lastChecked ?? null; }
+  if (patch.codexHomePath      !== undefined) { fields.push("codexHomePath = @codexHomePath");           values.codexHomePath     = patch.codexHomePath ?? null; }
+  if (patch.quotaData          !== undefined) { fields.push("quotaData = @quotaData");                   values.quotaData         = patch.quotaData ? JSON.stringify(patch.quotaData) : null; }
 
   if (fields.length === 0) return null;
 

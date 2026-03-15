@@ -107,4 +107,35 @@ export interface Account {
   pinned?: boolean;
   /** Ascending integer — lower = higher in the pinned list */
   pinOrder?: number;
+  /**
+   * Absolute path to the CODEX_HOME directory for this account.
+   * When set, quota can be fetched live via `codex app-server`.
+   * Example: "/Users/you/.codex-accounts/acc_001"
+   */
+  codexHomePath?: string;
+  /** Live quota data fetched from the Codex app-server. Stored in DB, refreshed on demand. */
+  quotaData?: QuotaData;
+}
+
+/** Live rate-limit snapshot from `account/rateLimits/read`. */
+export interface QuotaData {
+  /** ISO-8601 datetime when this was last fetched */
+  fetchedAt: string;
+  /** Email confirmed by the app-server — sanity-checks the right account is logged in */
+  email?: string;
+  /** e.g. "plus", "pro", "free" */
+  planType?: string;
+  /** 5-hour rolling window */
+  primary: QuotaWindow | null;
+  /** 7-day rolling window */
+  secondary: QuotaWindow | null;
+}
+
+export interface QuotaWindow {
+  /** 0-100 */
+  usedPercent: number;
+  /** Unix timestamp (seconds) when window resets */
+  resetsAt: number | null;
+  /** Duration of window in seconds */
+  windowDurationSecs: number | null;
 }

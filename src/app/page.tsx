@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { getSortedAccounts } from "@/data/accounts";
-import { Account, CodexAgent, ChatGPTAgent, AccountType } from "@/types";
+import { Account, CodexAgent, ChatGPTAgent, AccountType, QuotaData } from "@/types";
 import { AccountCard, DashboardStats } from "@/components";
 
 async function persist(id: string, patch: Partial<Account>) {
@@ -111,6 +111,15 @@ export default function Home() {
     );
   }, []);
 
+  const updateQuota = useCallback((id: string, quotaData: QuotaData) => {
+    setAccounts((prev) =>
+      prev.map((a) => {
+        if (a.id !== id) return a;
+        return { ...a, quotaData, lastChecked: new Date().toISOString() };
+      }),
+    );
+  }, []);
+
   return (
     <div className="min-h-screen">
       {/* Header */}
@@ -177,6 +186,7 @@ export default function Home() {
                       onAssignCodex={assignCodexAgent}
                       onAssignChatGPT={assignChatGPTAgent}
                       onSetAccountType={setAccountType}
+                      onQuotaUpdated={updateQuota}
                     />
                   ))}
                 </div>
@@ -184,7 +194,7 @@ export default function Home() {
             </section>
 
             <footer className="border-t border-zinc-800/60 pt-8 pb-12 text-center text-xs text-zinc-600">
-              <p>Quota checking automation coming soon</p>
+              <p>Click &ldquo;Sign In&rdquo; on any card to connect live quota tracking via Codex OAuth</p>
             </footer>
           </>
         )}
