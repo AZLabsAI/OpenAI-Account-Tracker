@@ -1,6 +1,13 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
+  --background: #f8fafc;
+  --foreground: #18181b;
+}
+
+.dark {
   --background: #09090b;
   --foreground: #fafafa;
 }
@@ -18,8 +25,8 @@ body {
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
 }
 
-/* Subtle grid background */
-body::before {
+/* Subtle grid background — dark only */
+.dark body::before {
   content: "";
   position: fixed;
   inset: 0;

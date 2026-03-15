@@ -18,10 +18,10 @@ export function DashboardStats({ accounts }: Props) {
   ).length;
 
   const stats: { label: string; value: number; accent: string }[] = [
-    { label: "Total Accounts", value: total, accent: "text-zinc-100" },
-    { label: "Starred", value: starred, accent: "text-amber-400" },
-    { label: "In Use", value: inUse, accent: "text-blue-400" },
-    { label: "Active", value: active, accent: "text-emerald-400" },
+    { label: "Total Accounts", value: total, accent: "text-zinc-900 dark:text-zinc-100" },
+    { label: "Starred", value: starred, accent: "text-amber-500 dark:text-amber-400" },
+    { label: "In Use", value: inUse, accent: "text-blue-500 dark:text-blue-400" },
+    { label: "Active", value: active, accent: "text-emerald-500 dark:text-emerald-400" },
   ];
 
   return (
@@ -29,7 +29,7 @@ export function DashboardStats({ accounts }: Props) {
       {stats.map((s) => (
         <div
           key={s.label}
-          className="rounded-xl border border-zinc-800 bg-zinc-900/40 px-5 py-4"
+          className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 px-5 py-4 shadow-sm dark:shadow-none"
         >
           <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
             {s.label}
