@@ -16,7 +16,7 @@ interface StaticProps {
 
 export function UsageBar({ limit }: StaticProps) {
   const pct = Math.max(0, Math.min(100, limit.remainingPct));
-  const { barColor, textColor } = colorFor(100 - pct); // remainingPct → invert for "used"
+  const { barColor, textColor } = colorFor(100 - pct);
 
   return (
     <div className="space-y-1.5">
@@ -24,7 +24,7 @@ export function UsageBar({ limit }: StaticProps) {
         <span className="text-zinc-400 font-medium">{limit.label}</span>
         <span className={`font-mono font-semibold ${textColor}`}>{pct}%</span>
       </div>
-      <BarTrack usedPct={100 - pct} barColor={barColor} />
+      <BarTrack remainingPct={pct} barColor={barColor} />
       {(limit.resetsAt || limit.total !== undefined) && (
         <div className="flex items-center justify-between text-xs text-zinc-500">
           {limit.resetsAt && <span>Resets: {limit.resetsAt}</span>}
@@ -103,7 +103,7 @@ function QuotaWindow({
           {remainingPct}% left
         </span>
       </div>
-      <BarTrack usedPct={usedPct} barColor={barColor} />
+      <BarTrack remainingPct={remainingPct} barColor={barColor} />
       <div className="flex items-center justify-between text-[11px] text-zinc-500">
         <span>{usedPct}% used</span>
         {resetsLabel && <span>Resets {resetsLabel}</span>}
@@ -114,12 +114,12 @@ function QuotaWindow({
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
 
-function BarTrack({ usedPct, barColor }: { usedPct: number; barColor: string }) {
+function BarTrack({ remainingPct, barColor }: { remainingPct: number; barColor: string }) {
   return (
     <div className="h-2 w-full rounded-full bg-zinc-800 overflow-hidden">
       <div
         className={`h-full rounded-full transition-all duration-500 ease-out ${barColor}`}
-        style={{ width: `${usedPct}%` }}
+        style={{ width: `${remainingPct}%` }}
       />
     </div>
   );

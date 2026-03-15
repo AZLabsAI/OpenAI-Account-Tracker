@@ -346,8 +346,8 @@ export function AccountCard({
           )}
         </div>
 
-        {/* Static usage limits (manual) */}
-        {account.usageLimits.length > 0 && (
+        {/* Static usage limits — only shown when no live quota data */}
+        {account.usageLimits.length > 0 && !account.quotaData && (
           <>
             <div className="my-4 h-px bg-zinc-800/80" />
             <div className="space-y-3">
