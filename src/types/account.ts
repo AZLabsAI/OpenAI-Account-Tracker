@@ -80,8 +80,8 @@ export interface Account {
   lastChecked?: string;
   /** Avatar URL or initials fallback */
   avatarUrl?: string;
-  /** Which Codex agent/machine this account is assigned to */
-  codexAssignedTo?: CodexAgent;
-  /** Which ChatGPT client device this account is assigned to */
-  chatgptAssignedTo?: ChatGPTAgent;
+  /** Which Codex agents/machines this account is assigned to (can be multiple) */
+  codexAssignedTo?: CodexAgent[];
+  /** Which ChatGPT client devices this account is assigned to (can be multiple) */
+  chatgptAssignedTo?: ChatGPTAgent[];
 }

@@ -21,15 +21,15 @@ export default function Home() {
     );
   }
 
-  function assignCodexAgent(id: string, agent: CodexAgent | undefined) {
+  function assignCodexAgent(id: string, agents: CodexAgent[]) {
     setAccounts((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, codexAssignedTo: agent } : a)),
+      prev.map((a) => (a.id === id ? { ...a, codexAssignedTo: agents } : a)),
     );
   }
 
-  function assignChatGPTAgent(id: string, agent: ChatGPTAgent | undefined) {
+  function assignChatGPTAgent(id: string, agents: ChatGPTAgent[]) {
     setAccounts((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, chatgptAssignedTo: agent } : a)),
+      prev.map((a) => (a.id === id ? { ...a, chatgptAssignedTo: agents } : a)),
     );
   }
 

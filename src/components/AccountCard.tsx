@@ -14,8 +14,8 @@ interface Props {
   account: Account;
   onToggleStar: (id: string) => void;
   onToggleInUse: (id: string) => void;
-  onAssignCodex: (id: string, agent: CodexAgent | undefined) => void;
-  onAssignChatGPT: (id: string, agent: ChatGPTAgent | undefined) => void;
+  onAssignCodex: (id: string, agents: CodexAgent[]) => void;
+  onAssignChatGPT: (id: string, agents: ChatGPTAgent[]) => void;
 }
 
 export function AccountCard({ account, onToggleStar, onToggleInUse, onAssignCodex, onAssignChatGPT }: Props) {
@@ -144,57 +144,109 @@ export function AccountCard({ account, onToggleStar, onToggleInUse, onAssignCode
           </p>
         </div>
         <div className="space-y-2.5">
+          {/* Codex Assigned To – multi */}
           <div>
             <span className="text-zinc-500 text-xs">Codex Assigned To</span>
-            <select
-              value={account.codexAssignedTo ?? ""}
-              onChange={(e) =>
-                onAssignCodex(
-                  account.id,
-                  e.target.value ? (e.target.value as CodexAgent) : undefined,
-                )
-              }
-              className="mt-0.5 block w-fit rounded-md border border-zinc-700/60 bg-zinc-800/70 px-2 py-1 text-[13px] font-medium text-zinc-200 outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500/30 transition-colors appearance-none cursor-pointer"
-              style={{
-                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2371717a' d='M3 4.5L6 8l3-3.5H3z'/%3E%3C/svg%3E")`,
-                backgroundRepeat: "no-repeat",
-                backgroundPosition: "right 6px center",
-                paddingRight: "24px",
-              }}
-            >
-              <option value="">Unassigned</option>
-              {CODEX_AGENTS.map((agent) => (
-                <option key={agent} value={agent}>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {(account.codexAssignedTo ?? []).map((agent) => (
+                <span
+                  key={agent}
+                  className="inline-flex items-center gap-1 rounded-md bg-violet-500/15 border border-violet-500/25 px-1.5 py-0.5 text-[11px] font-medium text-violet-300"
+                >
                   {agent}
-                </option>
+                  <button
+                    onClick={() =>
+                      onAssignCodex(
+                        account.id,
+                        (account.codexAssignedTo ?? []).filter((a) => a !== agent),
+                      )
+                    }
+                    className="text-violet-400 hover:text-violet-200 transition-colors leading-none"
+                    title={`Remove ${agent}`}
+                  >
+                    ×
+                  </button>
+                </span>
               ))}
-            </select>
+              {/* + button: show dropdown only for unassigned agents */}
+              {(account.codexAssignedTo ?? []).length < CODEX_AGENTS.length && (
+                <select
+                  value=""
+                  onChange={(e) => {
+                    if (!e.target.value) return;
+                    const next = [...(account.codexAssignedTo ?? []), e.target.value as CodexAgent];
+                    onAssignCodex(account.id, next);
+                  }}
+                  className="inline-flex items-center rounded-md border border-zinc-700/60 bg-zinc-800/70 px-1.5 py-0.5 text-[11px] font-medium text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 outline-none transition-colors appearance-none cursor-pointer"
+                  style={{
+                    backgroundImage: "none",
+                    width: "auto",
+                  }}
+                  title="Assign to another Codex agent"
+                >
+                  <option value="">+ Add</option>
+                  {CODEX_AGENTS.filter(
+                    (a) => !(account.codexAssignedTo ?? []).includes(a)
+                  ).map((agent) => (
+                    <option key={agent} value={agent}>
+                      {agent}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
           </div>
+
+          {/* ChatGPT Assigned To – multi */}
           <div>
             <span className="text-zinc-500 text-xs">ChatGPT Assigned To</span>
-            <select
-              value={account.chatgptAssignedTo ?? ""}
-              onChange={(e) =>
-                onAssignChatGPT(
-                  account.id,
-                  e.target.value ? (e.target.value as ChatGPTAgent) : undefined,
-                )
-              }
-              className="mt-0.5 block w-fit rounded-md border border-zinc-700/60 bg-zinc-800/70 px-2 py-1 text-[13px] font-medium text-zinc-200 outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500/30 transition-colors appearance-none cursor-pointer"
-              style={{
-                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2371717a' d='M3 4.5L6 8l3-3.5H3z'/%3E%3C/svg%3E")`,
-                backgroundRepeat: "no-repeat",
-                backgroundPosition: "right 6px center",
-                paddingRight: "24px",
-              }}
-            >
-              <option value="">Unassigned</option>
-              {CHATGPT_AGENTS.map((agent) => (
-                <option key={agent} value={agent}>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {(account.chatgptAssignedTo ?? []).map((agent) => (
+                <span
+                  key={agent}
+                  className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 border border-emerald-500/25 px-1.5 py-0.5 text-[11px] font-medium text-emerald-300"
+                >
                   {agent}
-                </option>
+                  <button
+                    onClick={() =>
+                      onAssignChatGPT(
+                        account.id,
+                        (account.chatgptAssignedTo ?? []).filter((a) => a !== agent),
+                      )
+                    }
+                    className="text-emerald-400 hover:text-emerald-200 transition-colors leading-none"
+                    title={`Remove ${agent}`}
+                  >
+                    ×
+                  </button>
+                </span>
               ))}
-            </select>
+              {(account.chatgptAssignedTo ?? []).length < CHATGPT_AGENTS.length && (
+                <select
+                  value=""
+                  onChange={(e) => {
+                    if (!e.target.value) return;
+                    const next = [...(account.chatgptAssignedTo ?? []), e.target.value as ChatGPTAgent];
+                    onAssignChatGPT(account.id, next);
+                  }}
+                  className="inline-flex items-center rounded-md border border-zinc-700/60 bg-zinc-800/70 px-1.5 py-0.5 text-[11px] font-medium text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 outline-none transition-colors appearance-none cursor-pointer"
+                  style={{
+                    backgroundImage: "none",
+                    width: "auto",
+                  }}
+                  title="Assign to another ChatGPT device"
+                >
+                  <option value="">+ Add</option>
+                  {CHATGPT_AGENTS.filter(
+                    (a) => !(account.chatgptAssignedTo ?? []).includes(a)
+                  ).map((agent) => (
+                    <option key={agent} value={agent}>
+                      {agent}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
           </div>
         </div>
         {account.lastChecked && (
