@@ -15,14 +15,48 @@ import { homedir } from "os";
 import { existsSync } from "fs";
 import type { QuotaData } from "@/types";
 
-// ─── Path to the real codex binary (not the shell wrapper) ───────────────────
-const CODEX_BINARY = `${homedir()}/.local/opt/codex/current/codex-aarch64-apple-darwin`;
-const CODEX_WRAPPER = `${homedir()}/bin/codex`;
-
+// ─── Path to the real codex binary — cross-platform ─────────────────────────
 function getCodexBin(): string {
-  if (existsSync(CODEX_BINARY)) return CODEX_BINARY;
-  if (existsSync(CODEX_WRAPPER)) return CODEX_WRAPPER;
-  throw new Error("Codex binary not found. Expected at ~/.local/opt/codex/current/codex-aarch64-apple-darwin");
+  const home = homedir();
+  const isWin = process.platform === "win32";
+
+  // Platform-specific binary names
+  const candidates: string[] = isWin
+    ? [
+        `${home}\\.local\\opt\\codex\\current\\codex-x86_64-pc-windows-msvc.exe`,
+        `${home}\\AppData\\Local\\codex\\codex.exe`,
+        `${home}\\bin\\codex.exe`,
+      ]
+    : process.arch === "arm64"
+      ? [
+          `${home}/.local/opt/codex/current/codex-aarch64-apple-darwin`,
+          `${home}/.local/opt/codex/current/codex`,
+          `${home}/bin/codex`,
+        ]
+      : [
+          `${home}/.local/opt/codex/current/codex-x86_64-unknown-linux-gnu`,
+          `${home}/.local/opt/codex/current/codex`,
+          `${home}/bin/codex`,
+        ];
+
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+
+  // Try finding `codex` on PATH as last resort
+  const pathCmd = isWin ? "codex.exe" : "codex";
+  try {
+    const { execSync } = require("child_process");
+    const resolved = execSync(isWin ? `where ${pathCmd}` : `which ${pathCmd}`, {
+      encoding: "utf-8",
+      timeout: 3000,
+    }).trim().split("\n")[0];
+    if (resolved && existsSync(resolved)) return resolved;
+  } catch { /* not on PATH */ }
+
+  throw new Error(
+    `Codex binary not found. Install Codex CLI and ensure it's in one of:\n${candidates.join("\n")}`,
+  );
 }
 
 // ─── JSON-RPC helpers ────────────────────────────────────────────────────────
@@ -155,7 +189,12 @@ export async function loginAccount(
             const url = result.authUrl as string;
             // Open the system browser
             const { exec } = await import("child_process");
-            exec(`open "${url}"`);
+            const openCmd = process.platform === "win32"
+              ? `start "" "${url}"`
+              : process.platform === "darwin"
+                ? `open "${url}"`
+                : `xdg-open "${url}"`;
+            exec(openCmd);
             if (onAuthUrl) onAuthUrl(url);
           }
         }
