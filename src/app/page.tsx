@@ -1,43 +1,84 @@
 "use client";
 
-import { useState } from "react";
-import { accounts as initialAccounts, getSortedAccounts } from "@/data/accounts";
+import { useState, useEffect, useCallback } from "react";
+import { getSortedAccounts } from "@/data/accounts";
 import { Account, CodexAgent, ChatGPTAgent, AccountType } from "@/types";
 import { AccountCard, DashboardStats } from "@/components";
 
+async function persist(id: string, patch: Partial<Account>) {
+  await fetch(`/api/accounts/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+}
+
 export default function Home() {
-  const [accounts, setAccounts] = useState<Account[]>(initialAccounts);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [loading, setLoading] = useState(true);
   const sorted = getSortedAccounts(accounts);
 
-  function toggleStar(id: string) {
-    setAccounts((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, starred: !a.starred } : a)),
-    );
-  }
+  // Load from SQLite on mount
+  useEffect(() => {
+    fetch("/api/accounts")
+      .then((r) => r.json())
+      .then((data: Account[]) => {
+        setAccounts(data);
+        setLoading(false);
+      });
+  }, []);
 
-  function toggleInUse(id: string) {
+  const toggleStar = useCallback((id: string) => {
     setAccounts((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, inUse: !a.inUse } : a)),
+      prev.map((a) => {
+        if (a.id !== id) return a;
+        const updated = { ...a, starred: !a.starred };
+        persist(id, { starred: updated.starred });
+        return updated;
+      }),
     );
-  }
+  }, []);
 
-  function assignCodexAgent(id: string, agents: CodexAgent[]) {
+  const toggleInUse = useCallback((id: string) => {
     setAccounts((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, codexAssignedTo: agents } : a)),
+      prev.map((a) => {
+        if (a.id !== id) return a;
+        const updated = { ...a, inUse: !a.inUse };
+        persist(id, { inUse: updated.inUse });
+        return updated;
+      }),
     );
-  }
+  }, []);
 
-  function assignChatGPTAgent(id: string, agents: ChatGPTAgent[]) {
+  const assignCodexAgent = useCallback((id: string, agents: CodexAgent[]) => {
     setAccounts((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, chatgptAssignedTo: agents } : a)),
+      prev.map((a) => {
+        if (a.id !== id) return a;
+        persist(id, { codexAssignedTo: agents });
+        return { ...a, codexAssignedTo: agents };
+      }),
     );
-  }
+  }, []);
 
-  function setAccountType(id: string, type: AccountType | undefined) {
+  const assignChatGPTAgent = useCallback((id: string, agents: ChatGPTAgent[]) => {
     setAccounts((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, accountType: type } : a)),
+      prev.map((a) => {
+        if (a.id !== id) return a;
+        persist(id, { chatgptAssignedTo: agents });
+        return { ...a, chatgptAssignedTo: agents };
+      }),
     );
-  }
+  }, []);
+
+  const setAccountType = useCallback((id: string, type: AccountType | undefined) => {
+    setAccounts((prev) =>
+      prev.map((a) => {
+        if (a.id !== id) return a;
+        persist(id, { accountType: type });
+        return { ...a, accountType: type };
+      }),
+    );
+  }, []);
 
   return (
     <div className="min-h-screen">
@@ -71,51 +112,49 @@ export default function Home() {
 
       {/* Main content */}
       <main className="mx-auto max-w-7xl px-6 py-10 space-y-10">
-        <DashboardStats accounts={accounts} />
 
-        <section>
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-zinc-100">Accounts</h2>
-            <p className="text-xs text-zinc-600">
-              Click ☆ to star · Click &ldquo;Mark In Use&rdquo; for active sessions
-            </p>
+        {loading ? (
+          <div className="flex items-center justify-center py-32">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-700 border-t-zinc-400" />
           </div>
+        ) : (
+          <>
+            <DashboardStats accounts={accounts} />
 
-          {accounts.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-zinc-800 p-16 text-center">
-              <p className="text-zinc-500">
-                No accounts yet. Add your first account in{" "}
-                <code className="rounded bg-zinc-800 px-1.5 py-0.5 text-xs font-mono text-zinc-300">
-                  src/data/accounts.ts
-                </code>
-              </p>
-            </div>
-          ) : (
-            <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
-              {sorted.map((account) => (
-                <AccountCard
-                  key={account.id}
-                  account={account}
-                  onToggleStar={toggleStar}
-                  onToggleInUse={toggleInUse}
-                  onAssignCodex={assignCodexAgent}
-                  onAssignChatGPT={assignChatGPTAgent}
-                  onSetAccountType={setAccountType}
-                />
-              ))}
-            </div>
-          )}
-        </section>
+            <section>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-zinc-100">Accounts</h2>
+                <p className="text-xs text-zinc-600">
+                  Click ☆ to star · Click &ldquo;Mark In Use&rdquo; for active sessions
+                </p>
+              </div>
 
-        <footer className="border-t border-zinc-800/60 pt-8 pb-12 text-center text-xs text-zinc-600">
-          <p>
-            To add accounts, edit{" "}
-            <code className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-zinc-400">
-              src/data/accounts.ts
-            </code>{" "}
-            · Quota checking automation coming soon
-          </p>
-        </footer>
+              {accounts.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-zinc-800 p-16 text-center">
+                  <p className="text-zinc-500">No accounts yet.</p>
+                </div>
+              ) : (
+                <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+                  {sorted.map((account) => (
+                    <AccountCard
+                      key={account.id}
+                      account={account}
+                      onToggleStar={toggleStar}
+                      onToggleInUse={toggleInUse}
+                      onAssignCodex={assignCodexAgent}
+                      onAssignChatGPT={assignChatGPTAgent}
+                      onSetAccountType={setAccountType}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <footer className="border-t border-zinc-800/60 pt-8 pb-12 text-center text-xs text-zinc-600">
+              <p>Quota checking automation coming soon</p>
+            </footer>
+          </>
+        )}
       </main>
     </div>
   );
