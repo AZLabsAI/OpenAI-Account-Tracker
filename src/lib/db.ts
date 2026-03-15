@@ -43,6 +43,7 @@ export function getDb(): Database.Database {
   if (!cols.includes("pinOrder"))      _db.exec("ALTER TABLE accounts ADD COLUMN pinOrder      INTEGER NOT NULL DEFAULT 0");
   if (!cols.includes("codexHomePath")) _db.exec("ALTER TABLE accounts ADD COLUMN codexHomePath TEXT");
   if (!cols.includes("quotaData"))     _db.exec("ALTER TABLE accounts ADD COLUMN quotaData     TEXT");
+  if (!cols.includes("refreshIntervalMins")) _db.exec("ALTER TABLE accounts ADD COLUMN refreshIntervalMins INTEGER");
 
   // Seed from accounts.ts if the table is empty
   const count = (_db.prepare("SELECT COUNT(*) as n FROM accounts").get() as { n: number }).n;
@@ -113,6 +114,7 @@ function rowToAccount(row: Record<string, unknown>): Account {
     chatgptAssignedTo: JSON.parse(row.chatgptAssignedTo as string),
     codexHomePath:     (row.codexHomePath as string) ?? undefined,
     quotaData:         row.quotaData ? JSON.parse(row.quotaData as string) : undefined,
+    refreshIntervalMins: row.refreshIntervalMins != null ? (row.refreshIntervalMins as number) : undefined,
   };
 }
 
@@ -145,6 +147,7 @@ export function updateAccount(id: string, patch: Partial<Account>): Account | nu
   if (patch.lastChecked        !== undefined) { fields.push("lastChecked = @lastChecked");               values.lastChecked       = patch.lastChecked ?? null; }
   if (patch.codexHomePath      !== undefined) { fields.push("codexHomePath = @codexHomePath");           values.codexHomePath     = patch.codexHomePath ?? null; }
   if (patch.quotaData          !== undefined) { fields.push("quotaData = @quotaData");                   values.quotaData         = patch.quotaData ? JSON.stringify(patch.quotaData) : null; }
+  if (patch.refreshIntervalMins !== undefined) { fields.push("refreshIntervalMins = @refreshIntervalMins"); values.refreshIntervalMins = patch.refreshIntervalMins ?? null; }
 
   if (fields.length === 0) return null;
 
