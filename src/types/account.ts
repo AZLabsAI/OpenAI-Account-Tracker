@@ -47,6 +47,14 @@ export const CHATGPT_AGENTS: ChatGPTAgent[] = [
   "ChatGPT on Work-PC",
 ];
 
+export type AccountType = "Primary account" | "Personal account" | "Work account";
+
+export const ACCOUNT_TYPES: AccountType[] = [
+  "Primary account",
+  "Personal account",
+  "Work account",
+];
+
 export interface UsageLimit {
   /** Human-readable label, e.g. "5 Hour Usage" */
   label: string;
@@ -76,6 +84,8 @@ export interface Account {
   inUse?: boolean;
   /** Optional notes visible in the detail view */
   notes?: string;
+  /** Account type classification */
+  accountType?: AccountType;
   /** Last time quota was checked (ISO-8601 datetime) – for future automation */
   lastChecked?: string;
   /** Avatar URL or initials fallback */

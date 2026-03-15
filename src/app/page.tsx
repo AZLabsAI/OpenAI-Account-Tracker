@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { accounts as initialAccounts, getSortedAccounts } from "@/data/accounts";
-import { Account, CodexAgent, ChatGPTAgent } from "@/types";
+import { Account, CodexAgent, ChatGPTAgent, AccountType } from "@/types";
 import { AccountCard, DashboardStats } from "@/components";
 
 export default function Home() {
@@ -30,6 +30,12 @@ export default function Home() {
   function assignChatGPTAgent(id: string, agents: ChatGPTAgent[]) {
     setAccounts((prev) =>
       prev.map((a) => (a.id === id ? { ...a, chatgptAssignedTo: agents } : a)),
+    );
+  }
+
+  function setAccountType(id: string, type: AccountType | undefined) {
+    setAccounts((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, accountType: type } : a)),
     );
   }
 
@@ -94,6 +100,7 @@ export default function Home() {
                   onToggleInUse={toggleInUse}
                   onAssignCodex={assignCodexAgent}
                   onAssignChatGPT={assignChatGPTAgent}
+                  onSetAccountType={setAccountType}
                 />
               ))}
             </div>

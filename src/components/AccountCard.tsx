@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Account, CODEX_AGENTS, CHATGPT_AGENTS, CodexAgent, ChatGPTAgent } from "@/types";
+import { Account, CODEX_AGENTS, CHATGPT_AGENTS, CodexAgent, ChatGPTAgent, ACCOUNT_TYPES, AccountType } from "@/types";
 import {
   getAccountStatus,
   formatDate,
@@ -16,9 +16,10 @@ interface Props {
   onToggleInUse: (id: string) => void;
   onAssignCodex: (id: string, agents: CodexAgent[]) => void;
   onAssignChatGPT: (id: string, agents: ChatGPTAgent[]) => void;
+  onSetAccountType: (id: string, type: AccountType | undefined) => void;
 }
 
-export function AccountCard({ account, onToggleStar, onToggleInUse, onAssignCodex, onAssignChatGPT }: Props) {
+export function AccountCard({ account, onToggleStar, onToggleInUse, onAssignCodex, onAssignChatGPT, onSetAccountType }: Props) {
   const [copied, setCopied] = useState(false);
   const status = getAccountStatus(account);
   const daysLeft = daysUntilExpiration(account.expirationDate);
@@ -279,7 +280,33 @@ export function AccountCard({ account, onToggleStar, onToggleInUse, onAssignCode
         </>
       )}
 
-      {/* Notes */}
+      {/* Account Type */}
+      <div className="mt-4">
+        <span className="text-zinc-500 text-xs">Account Type</span>
+        <select
+          value={account.accountType ?? ""}
+          onChange={(e) =>
+            onSetAccountType(
+              account.id,
+              e.target.value ? (e.target.value as AccountType) : undefined,
+            )
+          }
+          className="mt-0.5 block w-fit rounded-md border border-zinc-700/60 bg-zinc-800/70 px-2 py-1 text-[13px] font-medium text-zinc-200 outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500/30 transition-colors appearance-none cursor-pointer"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2371717a' d='M3 4.5L6 8l3-3.5H3z'/%3E%3C/svg%3E")`,
+            backgroundRepeat: "no-repeat",
+            backgroundPosition: "right 6px center",
+            paddingRight: "24px",
+          }}
+        >
+          <option value="">— Select type —</option>
+          {ACCOUNT_TYPES.map((t) => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Notes (free-form, if any) */}
       {account.notes && (
         <div className="mt-4 rounded-lg bg-zinc-800/40 px-3 py-2 text-xs text-zinc-500">
           {account.notes}
