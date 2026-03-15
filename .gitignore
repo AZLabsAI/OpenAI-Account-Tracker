@@ -42,3 +42,5 @@ next-env.d.ts
 
 # SQLite database (contains personal data)
 data.db
+data.db-shm
+data.db-wal
