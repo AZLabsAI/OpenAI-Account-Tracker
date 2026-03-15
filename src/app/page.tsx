@@ -490,6 +490,24 @@ export default function Home() {
           </>
         )}
       </main>
+
+      {/* Site footer */}
+      <footer className="border-t border-zinc-800/40 py-4 mt-8">
+        <div className="mx-auto max-w-7xl px-6 flex items-center justify-between text-[11px] text-zinc-600">
+          <span>v0.0.1 Beta</span>
+          <span>
+            Created by{" "}
+            <a
+              href="https://azlabs.co.za"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-zinc-500 hover:text-zinc-300 transition-colors"
+            >
+              AZ Labs
+            </a>
+          </span>
+        </div>
+      </footer>
     </div>
   );
 }
