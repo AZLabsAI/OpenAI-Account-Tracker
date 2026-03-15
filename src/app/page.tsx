@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { getSortedAccounts } from "@/data/accounts";
 import { Account, CodexAgent, ChatGPTAgent, AccountType, QuotaData } from "@/types";
-import { AccountCard, DashboardStats, AddAccountCard } from "@/components";
+import { AccountCard, DashboardStats, AddAccountCard, NotificationBell } from "@/components";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 async function persist(id: string, patch: Partial<Account>) {
@@ -41,15 +41,94 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [spinLevel]);
 
-  // Load from SQLite on mount
+  // ── Web Notifications: request permission on mount ─────────────────────────
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  /** Fire a browser Web Notification for a notification event */
+  const fireWebNotification = useCallback((event: { eventType: string; message: string; id?: number }) => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission !== "granted") return;
+
+    const iconMap: Record<string, string> = {
+      quota_exhausted: "⛔",
+      quota_critical: "🔴",
+      quota_warning: "⚠️",
+      quota_reset: "✅",
+      account_switch: "🔄",
+    };
+    const emoji = iconMap[event.eventType] ?? "🔔";
+
+    const n = new Notification(`${emoji} OpenAI Account Tracker`, {
+      body: event.message,
+      icon: "/favicon.ico",
+      tag: `oat-${event.eventType}-${event.id ?? Date.now()}`,
+      silent: false,
+    });
+
+    n.onclick = () => {
+      window.focus();
+      n.close();
+    };
+
+    // Mark as delivered via web
+    if (event.id) {
+      fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: event.id }),
+      }).catch(() => {});
+    }
+  }, []);
+
+  // ── Sync inUse flags with whichever account is logged into ~/.codex ────────
+  const syncActiveCodex = useCallback(async (currentAccounts?: Account[]) => {
+    try {
+      const res = await fetch("/api/accounts/active-codex");
+      if (!res.ok) return;
+      const data = await res.json() as {
+        activeEmail: string | null;
+        matchedAccountId: string | null;
+      };
+      if (!data.activeEmail) return;
+
+      // Update local state to reflect whichever account is active
+      setAccounts((prev) => {
+        const base = currentAccounts ?? prev;
+        let changed = false;
+        const next = base.map((a) => {
+          const shouldBeInUse = a.id === data.matchedAccountId;
+          if (a.inUse !== shouldBeInUse) {
+            changed = true;
+            return { ...a, inUse: shouldBeInUse };
+          }
+          return a;
+        });
+        return changed ? next : base;
+      });
+    } catch { /* silent — detection is best-effort */ }
+  }, []);
+
+  // Load from SQLite on mount, then immediately sync active Codex account
   useEffect(() => {
     fetch("/api/accounts")
       .then((r) => r.json())
       .then((data: Account[]) => {
         setAccounts(data);
         setLoading(false);
+        // Sync active account right after initial load
+        syncActiveCodex(data);
       });
-  }, []);
+  }, [syncActiveCodex]);
+
+  // Poll ~/.codex/auth.json every 30s to detect account switches
+  useEffect(() => {
+    const interval = setInterval(() => syncActiveCodex(), 30_000);
+    return () => clearInterval(interval);
+  }, [syncActiveCodex]);
 
   // ── Derived: sorted → filtered → searched ─────────────────────────────────
   const sorted = getSortedAccounts(accounts);
@@ -112,7 +191,8 @@ export default function Home() {
           signal: AbortSignal.timeout(30_000),
         });
         if (res.ok) {
-          const quotaData: QuotaData = await res.json();
+          const data = await res.json() as QuotaData & { notifications?: Array<{ id: number; eventType: string; message: string }> };
+          const { notifications: newNotifs, ...quotaData } = data;
           setAccounts((prev) =>
             prev.map((a) =>
               a.id === acc.id
@@ -120,6 +200,10 @@ export default function Home() {
                 : a,
             ),
           );
+          // Fire Web Notifications
+          if (newNotifs) {
+            for (const n of newNotifs) fireWebNotification(n);
+          }
           successCount++;
         } else {
           failCount++;
@@ -140,7 +224,7 @@ export default function Home() {
 
     setRefreshingAll(false);
     setRefreshProgress(null);
-  }, [accounts, emitLog]);
+  }, [accounts, emitLog, fireWebNotification]);
 
   // ── Account mutations ─────────────────────────────────────────────────────
 
@@ -274,7 +358,8 @@ export default function Home() {
           fetch(`/api/accounts/${acc.id}/quota`, { method: "POST", signal: AbortSignal.timeout(30_000) })
             .then(async (res) => {
               if (res.ok) {
-                const quotaData: QuotaData = await res.json();
+                const data = await res.json() as QuotaData & { notifications?: Array<{ id: number; eventType: string; message: string }> };
+                const { notifications: newNotifs, ...quotaData } = data;
                 setAccounts((prev) =>
                   prev.map((a) =>
                     a.id === acc.id
@@ -282,6 +367,10 @@ export default function Home() {
                       : a,
                   ),
                 );
+                // Fire Web Notifications from auto-refresh
+                if (newNotifs) {
+                  for (const n of newNotifs) fireWebNotification(n);
+                }
               }
             })
             .catch(() => {})
@@ -293,7 +382,7 @@ export default function Home() {
     }, 30_000); // check every 30 seconds
 
     return () => clearInterval(interval);
-  }, [accounts]);
+  }, [accounts, fireWebNotification]);
 
   // Count signed-in accounts for the Refresh All button
   const signedInCount = accounts.filter((a) => a.codexHomePath).length;
@@ -358,6 +447,9 @@ export default function Home() {
 
             {/* Theme toggle */}
             <ThemeToggle />
+
+            {/* Notification bell */}
+            <NotificationBell />
 
             {/* Settings link */}
             <a
