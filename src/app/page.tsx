@@ -111,11 +111,16 @@ export default function Home() {
     );
   }, []);
 
-  const updateQuota = useCallback((id: string, quotaData: QuotaData) => {
+  const updateQuota = useCallback((id: string, quotaData: QuotaData, codexHomePath?: string) => {
     setAccounts((prev) =>
       prev.map((a) => {
         if (a.id !== id) return a;
-        return { ...a, quotaData, lastChecked: new Date().toISOString() };
+        return {
+          ...a,
+          quotaData,
+          lastChecked: new Date().toISOString(),
+          ...(codexHomePath ? { codexHomePath } : {}),
+        };
       }),
     );
   }, []);

@@ -71,6 +71,7 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
+      codexHomePath,
       email: quotaData?.email,
       planType: quotaData?.planType,
       quotaData,

@@ -15,7 +15,7 @@ interface Props {
   onAssignCodex: (id: string, agents: CodexAgent[]) => void;
   onAssignChatGPT: (id: string, agents: ChatGPTAgent[]) => void;
   onSetAccountType: (id: string, type: AccountType | undefined) => void;
-  onQuotaUpdated: (id: string, quotaData: QuotaData) => void;
+  onQuotaUpdated: (id: string, quotaData: QuotaData, codexHomePath?: string) => void;
 }
 
 type LoginState = "idle" | "waiting" | "success" | "error";
@@ -73,8 +73,7 @@ export function AccountCard({
       const data = await res.json();
       if (data.success) {
         setLoginState("success");
-        if (data.quotaData) onQuotaUpdated(account.id, data.quotaData);
-        // Reset back to idle after 3 s
+        if (data.quotaData) onQuotaUpdated(account.id, data.quotaData, data.codexHomePath);
         setTimeout(() => setLoginState("idle"), 3000);
       } else {
         setLoginState("error");
