@@ -1,99 +1,194 @@
-# OpenAI Account Tracker
+<div align="center">
 
-A local-first dashboard for managing multiple OpenAI accounts — track subscriptions, usage quotas, expiration dates, and agent assignments across machines.
+# <img src="https://upload.wikimedia.org/wikipedia/commons/0/04/ChatGPT_logo.svg" width="28" /> OpenAI Account Tracker
 
-![Next.js](https://img.shields.io/badge/Next.js-15-black) ![SQLite](https://img.shields.io/badge/SQLite-local-blue) ![License](https://img.shields.io/badge/license-MIT-green)
+**A local-first dashboard for managing multiple OpenAI accounts.**\
+Track subscriptions, live usage quotas, expiration dates, and agent assignments — all from one place.
 
-## Features
+[![Version](https://img.shields.io/badge/version-0.0.1--beta-blue?style=flat-square)](https://github.com/AZLabsAI/OpenAI-Account-Tracker/releases)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=flat-square&logo=next.js)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://typescriptlang.org)
+[![SQLite](https://img.shields.io/badge/SQLite-local--first-003B57?style=flat-square&logo=sqlite&logoColor=white)](https://sqlite.org)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 
-- **Multi-account management** — add, edit, pin, star, and delete OpenAI accounts
-- **Live quota tracking** — OAuth sign-in via Codex CLI fetches real-time 5-hour and weekly usage
-- **Per-account auto-refresh** — set custom refresh intervals (5 min to 2 hours) per account
-- **Flippable cards** — click the grip zone at the bottom of any card to access settings
-- **Stale-aware indicators** — refresh buttons shift from blue → amber → orange as quota data ages
-- **Search & filter** — filter by name, email, subscription, account type, or status
-- **Structured logging** — full Settings page with color-coded, filterable, auto-refreshing logs
-- **SQLite persistence** — all data stored locally in `data.db` (never leaves your machine)
-- **Dark theme** — zinc palette, designed for extended use
+<br />
 
-## Requirements
+<img src="docs/screenshots/hero.png" alt="Dashboard showing account cards with live quota tracking" width="100%" />
 
-- **Node.js** 18+ (LTS recommended)
-- **npm** or **pnpm**
-- **Codex CLI** (optional — required only for live quota tracking)
-  - [Install Codex CLI](https://github.com/openai/codex) and ensure it's on your PATH or in the standard install directory
+<sub>↑ Dashboard view — live quota bars, agent assignments, stale-aware refresh, pin & star controls</sub>
 
-## Getting Started
+</div>
+
+<br />
+
+## ✨ Why This Exists
+
+If you run multiple OpenAI accounts — for personal projects, work, clients, different Codex agents — keeping track of which account is at what usage level is a pain. This app puts everything on one screen with **live data** from the Codex CLI.
+
+> **Local-first, zero telemetry.** Your data lives in a SQLite file on your machine. Nothing is sent anywhere.
+
+<br />
+
+## 🎯 Features
+
+<table>
+<tr>
+<td width="50%">
+
+### Core
+- 📊 **Live quota tracking** — real-time 5-hour & weekly usage via Codex OAuth
+- 🔄 **Auto-refresh** — per-account intervals from 5 min to 2 hours
+- 📌 **Pin, ⭐ star, and 🔵 mark accounts** — organize by priority
+- 🔍 **Search & filter** — by name, email, type, or status
+- 🎴 **Flippable cards** — front shows data, back reveals settings
+
+</td>
+<td width="50%">
+
+### Details
+- 🖼️ **Custom avatars** — upload your own account logos
+- ⏳ **Stale indicators** — refresh buttons shift blue → amber → orange
+- 🏷️ **Account types** — Primary, Personal, Work, Business
+- 🤖 **Agent assignments** — track which Codex/ChatGPT agents use which account
+- 📋 **Structured logging** — full diagnostics page with color-coded logs
+
+</td>
+</tr>
+</table>
+
+<br />
+
+## 📸 Screenshots
+
+<details>
+<summary><strong>Card Settings (flip view)</strong></summary>
+<br />
+<img src="docs/screenshots/card-settings.png" alt="Flipped card showing auto-refresh settings, connection status, and danger zone" width="100%" />
+<br />
+<sub>Flip any card to access per-account auto-refresh intervals, connection status, and the delete button (tucked away in the Danger Zone).</sub>
+</details>
+
+<br />
+
+## 🚀 Quick Start
 
 ```bash
-# Clone the repo
 git clone https://github.com/AZLabsAI/OpenAI-Account-Tracker.git
 cd OpenAI-Account-Tracker
-
-# Install dependencies
 npm install
-
-# Start dev server
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open **http://localhost:3000** — that's it.\
+Three example accounts are seeded on first run. Add your own or delete the examples.
 
-On first run, three example accounts are seeded into `data.db`. Replace them with your own via the **+ Add Account** card or delete them from the UI.
+<br />
 
-## Cross-Platform Support
+## 🔌 Live Quota Tracking (Optional)
 
-| Platform | Dashboard | Live Quota (Codex CLI) |
-|----------|-----------|----------------------|
-| **macOS** (ARM/Intel) | ✅ | ✅ |
+To see real-time usage bars, you need the [Codex CLI](https://github.com/openai/codex) installed:
+
+```bash
+# Install Codex CLI (if you haven't)
+npm install -g @openai/codex
+```
+
+Then click **Sign In** on any card → a browser window opens for OAuth → done.\
+The app auto-detects the Codex binary on macOS, Windows, and Linux.
+
+<br />
+
+## 🖥️ Cross-Platform
+
+| | Dashboard | Live Quota |
+|---|:---:|:---:|
+| **macOS** (ARM / Intel) | ✅ | ✅ |
 | **Windows** (x64) | ✅ | ✅ |
 | **Linux** (x64) | ✅ | ✅ |
 
-The Codex CLI binary is auto-detected from standard install locations on all platforms. Browser-based OAuth opens via the platform-native command (`open` / `start` / `xdg-open`).
+`better-sqlite3` compiles natively on `npm install`. Browser OAuth uses the platform-native open command.
 
-## Architecture
+<br />
+
+## 🏗️ Architecture
 
 ```
 src/
 ├── app/
-│   ├── page.tsx              # Main dashboard
-│   ├── settings/page.tsx     # Logs & diagnostics
+│   ├── page.tsx                  ← Main dashboard (client component)
+│   ├── settings/page.tsx         ← Logs & diagnostics
 │   └── api/
-│       ├── accounts/         # CRUD + login + quota endpoints
-│       └── logs/             # Log viewer API
+│       ├── accounts/             ← CRUD + OAuth login + quota refresh
+│       └── logs/                 ← Structured log viewer API
+│
 ├── components/
-│   ├── AccountCard.tsx       # Flippable card (front + back)
-│   ├── AddAccountCard.tsx    # New account modal
-│   ├── UsageBar.tsx          # Quota visualisation
-│   ├── DashboardStats.tsx    # Summary stats
-│   └── StatusBadge.tsx       # Health indicator
+│   ├── AccountCard.tsx           ← Flippable card (3D CSS transform)
+│   ├── AddAccountCard.tsx        ← Modal form for new accounts
+│   ├── UsageBar.tsx              ← Quota progress visualisation
+│   ├── DashboardStats.tsx        ← Summary stat cards
+│   └── StatusBadge.tsx           ← Health indicator pill
+│
 ├── lib/
-│   ├── db.ts                 # SQLite via better-sqlite3
-│   ├── logger.ts             # Structured logging to SQLite
-│   └── codex-appserver.ts    # Codex CLI JSON-RPC wrapper
-├── data/
-│   └── accounts.ts           # Seed data + sort/status helpers
-└── types/
-    └── account.ts            # TypeScript interfaces
+│   ├── db.ts                     ← SQLite via better-sqlite3
+│   ├── logger.ts                 ← Structured logging to SQLite
+│   └── codex-appserver.ts        ← Codex CLI JSON-RPC bridge
+│
+├── data/accounts.ts              ← Seed data + sort/status helpers
+└── types/account.ts              ← TypeScript interfaces
 ```
 
-## Local-Only Design
+<br />
 
-This app is intentionally **not deployable to Vercel or any serverless platform**:
+## 🔒 Privacy & Security
 
-- **SQLite** requires a persistent local filesystem
-- **Codex CLI** must be installed as a native binary
-- **CODEX_HOME** directories are local filesystem paths
+| Aspect | Status |
+|---|---|
+| Account data | Stored in `data.db` locally — **gitignored**, never committed |
+| Telemetry | **None** — zero external calls except OpenAI during OAuth |
+| API keys | **None** stored in the repo |
+| Seed data | Uses only `@example.com` placeholders |
+| Network calls | Only to `localhost` and OpenAI auth endpoints |
 
-For multi-device access on your local network, use `http://<your-ip>:3000`.
+This app is intentionally **not deployable to Vercel** or any serverless platform — it requires local SQLite and the Codex CLI binary. For multi-device access on your LAN, use `http://<your-ip>:3000`.
 
-## Data Privacy
+<br />
 
-- `data.db` is gitignored — your account data never leaves your machine
-- Seed data uses `@example.com` placeholders only
-- No telemetry, no external API calls (except to OpenAI during OAuth)
-- No API keys or secrets are stored in the repo
+## 🗺️ Roadmap
 
-## License
+- [ ] Export/import accounts (JSON backup)
+- [ ] Multi-device sync via CRDTs or file-based replication
+- [ ] Account grouping / workspaces
+- [ ] Usage history charts (daily/weekly trends)
+- [ ] Notification alerts when quota drops below threshold
+- [ ] Browser extension for quick-check from any tab
 
-MIT
+<br />
+
+## 🤝 Contributing
+
+This project is in **early beta** — contributions welcome!
+
+1. Fork the repo
+2. Create a feature branch (`git checkout -b feat/my-feature`)
+3. Commit your changes
+4. Push and open a Pull Request
+
+Please open an [issue](https://github.com/AZLabsAI/OpenAI-Account-Tracker/issues) first for major changes.
+
+<br />
+
+## 📄 License
+
+MIT — see [LICENSE](LICENSE) for details.
+
+<br />
+
+<div align="center">
+
+---
+
+**v0.0.1 Beta** · Made with 🧠 by [AZ Labs](https://azlabs.co.za)
+
+<sub>If this is useful, consider giving it a ⭐</sub>
+
+</div>
