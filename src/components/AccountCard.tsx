@@ -144,9 +144,9 @@ export function AccountCard({ account, onToggleStar, onToggleInUse, onAssignCode
           </p>
         </div>
         <div className="space-y-2.5">
-          {/* Codex Assigned To – multi */}
+          {/* Codex O-Auth – multi */}
           <div>
-            <span className="text-zinc-500 text-xs">Codex Assigned To</span>
+            <span className="text-zinc-500 text-xs">Codex O-Auth</span>
             <div className="mt-1 flex flex-wrap gap-1">
               {(account.codexAssignedTo ?? []).map((agent) => (
                 <span
