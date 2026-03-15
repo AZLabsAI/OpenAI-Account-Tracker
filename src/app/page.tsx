@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { getSortedAccounts } from "@/data/accounts";
 import { Account, CodexAgent, ChatGPTAgent, AccountType, QuotaData } from "@/types";
 import { AccountCard, DashboardStats, AddAccountCard } from "@/components";
@@ -235,6 +235,57 @@ export default function Home() {
     setAccounts((prev) => [...prev, account]);
   }, []);
 
+  const updateSettings = useCallback((id: string, patch: Partial<Account>) => {
+    setAccounts((prev) =>
+      prev.map((a) => {
+        if (a.id !== id) return a;
+        persist(id, patch);
+        return { ...a, ...patch };
+      }),
+    );
+  }, []);
+
+  // ── Auto-refresh timer ────────────────────────────────────────────────────
+  // Runs a single 30s interval that checks all accounts with a refreshIntervalMins
+  // and fires a quota refresh when enough time has elapsed since their last fetch.
+  const autoRefreshingRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      for (const acc of accounts) {
+        if (!acc.refreshIntervalMins || !acc.codexHomePath) continue;
+        if (autoRefreshingRef.current.has(acc.id)) continue; // already in-flight
+
+        const fetchedAt = acc.quotaData?.fetchedAt ? new Date(acc.quotaData.fetchedAt).getTime() : 0;
+        const elapsed = (now - fetchedAt) / 60_000; // minutes
+
+        if (elapsed >= acc.refreshIntervalMins) {
+          autoRefreshingRef.current.add(acc.id);
+          fetch(`/api/accounts/${acc.id}/quota`, { method: "POST", signal: AbortSignal.timeout(30_000) })
+            .then(async (res) => {
+              if (res.ok) {
+                const quotaData: QuotaData = await res.json();
+                setAccounts((prev) =>
+                  prev.map((a) =>
+                    a.id === acc.id
+                      ? { ...a, quotaData, lastChecked: new Date().toISOString() }
+                      : a,
+                  ),
+                );
+              }
+            })
+            .catch(() => {})
+            .finally(() => {
+              autoRefreshingRef.current.delete(acc.id);
+            });
+        }
+      }
+    }, 30_000); // check every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [accounts]);
+
   // Count signed-in accounts for the Refresh All button
   const signedInCount = accounts.filter((a) => a.codexHomePath).length;
 
@@ -410,6 +461,7 @@ export default function Home() {
                       onAssignChatGPT={assignChatGPTAgent}
                       onSetAccountType={setAccountType}
                       onQuotaUpdated={updateQuota}
+                      onUpdateSettings={updateSettings}
                     />
                   ))}
                   <AddAccountCard onAdded={addAccount} />

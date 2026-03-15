@@ -115,6 +115,11 @@ export interface Account {
   codexHomePath?: string;
   /** Live quota data fetched from the Codex app-server. Stored in DB, refreshed on demand. */
   quotaData?: QuotaData;
+  /**
+   * Auto-refresh interval in minutes. null/undefined = manual only.
+   * When set, the dashboard will automatically refresh quota at this cadence.
+   */
+  refreshIntervalMins?: number | null;
 }
 
 /** Live rate-limit snapshot from `account/rateLimits/read`. */
