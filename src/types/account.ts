@@ -144,3 +144,43 @@ export interface QuotaWindow {
   /** Duration of window in seconds */
   windowDurationSecs: number | null;
 }
+
+// ─── Notification types ─────────────────────────────────────────────────────
+
+export type NotificationEventType =
+  | "quota_warning"
+  | "quota_critical"
+  | "quota_exhausted"
+  | "quota_reset"
+  | "account_switch";
+
+export interface NotificationEvent {
+  id: number;
+  accountId: string;
+  eventType: NotificationEventType;
+  /** 'primary' (5h) | 'secondary' (weekly) | null (for account_switch) */
+  window: "primary" | "secondary" | null;
+  usedPercent: number | null;
+  message: string;
+  createdAt: string;
+  acknowledged: boolean;
+  deliveredWeb: boolean;
+  deliveredNative: boolean;
+  deliveredTelegram: boolean;
+  telegramMessageId: number | null;
+}
+
+export interface NotificationSettings {
+  notificationsEnabled: boolean;
+  webEnabled: boolean;
+  nativeEnabled: boolean;
+  telegramEnabled: boolean;
+  telegramConfigured: boolean;
+  telegramSource: "env" | "db" | null;
+  telegramBotTokenMasked: string | null;
+  telegramChatId: string | null;
+  quietHoursEnabled: boolean;
+  quietHoursStart: string;
+  quietHoursEnd: string;
+  defaultThresholds: number[];
+}

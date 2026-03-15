@@ -45,6 +45,32 @@ export function getDb(): Database.Database {
   if (!cols.includes("quotaData"))     _db.exec("ALTER TABLE accounts ADD COLUMN quotaData     TEXT");
   if (!cols.includes("refreshIntervalMins")) _db.exec("ALTER TABLE accounts ADD COLUMN refreshIntervalMins INTEGER");
 
+  // ── Settings table ────────────────────────────────────────────────────────
+  _db.exec(`
+    CREATE TABLE IF NOT EXISTS settings (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  `);
+
+  // ── Notification events table ─────────────────────────────────────────────
+  _db.exec(`
+    CREATE TABLE IF NOT EXISTS notification_events (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      accountId         TEXT NOT NULL,
+      eventType         TEXT NOT NULL,
+      window            TEXT,
+      usedPercent       REAL,
+      message           TEXT NOT NULL,
+      createdAt         TEXT NOT NULL,
+      acknowledged      INTEGER NOT NULL DEFAULT 0,
+      deliveredWeb      INTEGER NOT NULL DEFAULT 0,
+      deliveredNative   INTEGER NOT NULL DEFAULT 0,
+      deliveredTelegram INTEGER NOT NULL DEFAULT 0,
+      telegramMessageId INTEGER
+    )
+  `);
+
   // Seed from accounts.ts if the table is empty
   const count = (_db.prepare("SELECT COUNT(*) as n FROM accounts").get() as { n: number }).n;
   if (count === 0) {
@@ -200,4 +226,153 @@ export function createAccount(data: {
   });
   const row = db.prepare("SELECT * FROM accounts WHERE id = @id").get({ id }) as Record<string, unknown>;
   return rowToAccount(row);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Settings helpers
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export function getSetting(key: string): string | null {
+  const db = getDb();
+  const row = db.prepare("SELECT value FROM settings WHERE key = @key").get({ key }) as { value: string } | undefined;
+  return row?.value ?? null;
+}
+
+export function setSetting(key: string, value: string): void {
+  const db = getDb();
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (@key, @value)").run({ key, value });
+}
+
+export function getAllSettings(): Record<string, string> {
+  const db = getDb();
+  const rows = db.prepare("SELECT key, value FROM settings").all() as { key: string; value: string }[];
+  return Object.fromEntries(rows.map((r) => [r.key, r.value]));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Notification event helpers
+// ═══════════════════════════════════════════════════════════════════════════════
+
+import type { NotificationEvent, NotificationEventType } from "@/types";
+
+export function insertNotificationEvent(event: {
+  accountId: string;
+  eventType: NotificationEventType;
+  window: string | null;
+  usedPercent: number | null;
+  message: string;
+}): NotificationEvent {
+  const db = getDb();
+  const createdAt = new Date().toISOString();
+  const result = db.prepare(`
+    INSERT INTO notification_events (accountId, eventType, window, usedPercent, message, createdAt)
+    VALUES (@accountId, @eventType, @window, @usedPercent, @message, @createdAt)
+  `).run({ ...event, createdAt });
+
+  return {
+    id: result.lastInsertRowid as number,
+    accountId: event.accountId,
+    eventType: event.eventType as NotificationEventType,
+    window: event.window as NotificationEvent["window"],
+    usedPercent: event.usedPercent,
+    message: event.message,
+    createdAt,
+    acknowledged: false,
+    deliveredWeb: false,
+    deliveredNative: false,
+    deliveredTelegram: false,
+    telegramMessageId: null,
+  };
+}
+
+export function getNotificationEvents(opts?: {
+  limit?: number;
+  unacknowledgedOnly?: boolean;
+}): NotificationEvent[] {
+  const db = getDb();
+  const where = opts?.unacknowledgedOnly ? "WHERE acknowledged = 0" : "";
+  const limit = opts?.limit ?? 50;
+  const rows = db.prepare(`SELECT * FROM notification_events ${where} ORDER BY id DESC LIMIT ${limit}`).all() as Record<string, unknown>[];
+  return rows.map(rowToNotificationEvent);
+}
+
+export function acknowledgeNotificationEvent(id: number): void {
+  const db = getDb();
+  db.prepare("UPDATE notification_events SET acknowledged = 1 WHERE id = @id").run({ id });
+}
+
+export function acknowledgeAllNotificationEvents(): void {
+  const db = getDb();
+  db.prepare("UPDATE notification_events SET acknowledged = 1 WHERE acknowledged = 0").run();
+}
+
+export function markNotificationDelivered(id: number, channel: "web" | "native" | "telegram", telegramMessageId?: number): void {
+  const db = getDb();
+  if (channel === "web") db.prepare("UPDATE notification_events SET deliveredWeb = 1 WHERE id = @id").run({ id });
+  if (channel === "native") db.prepare("UPDATE notification_events SET deliveredNative = 1 WHERE id = @id").run({ id });
+  if (channel === "telegram") {
+    db.prepare("UPDATE notification_events SET deliveredTelegram = 1, telegramMessageId = @msgId WHERE id = @id").run({ id, msgId: telegramMessageId ?? null });
+  }
+}
+
+export function getUnacknowledgedCount(): number {
+  const db = getDb();
+  const row = db.prepare("SELECT COUNT(*) as n FROM notification_events WHERE acknowledged = 0").get() as { n: number };
+  return row.n;
+}
+
+/**
+ * Check if there's already an unresolved event of this type for this account+window.
+ * "Unresolved" means: no quota_reset event exists after the last exhausted/critical/warning event.
+ */
+export function hasUnresolvedEvent(accountId: string, eventType: NotificationEventType, window: string | null): boolean {
+  const db = getDb();
+
+  // For reset events, we never dedup — always fire
+  if (eventType === "quota_reset") return false;
+
+  // Find the most recent event of this exact type for this account+window
+  const lastEvent = db.prepare(`
+    SELECT id, createdAt FROM notification_events
+    WHERE accountId = @accountId AND eventType = @eventType AND (window = @window OR (window IS NULL AND @window IS NULL))
+    ORDER BY id DESC LIMIT 1
+  `).get({ accountId, eventType, window: window ?? null }) as { id: number; createdAt: string } | undefined;
+
+  if (!lastEvent) return false;
+
+  // Check if there's been a reset since that event
+  const resetAfter = db.prepare(`
+    SELECT id FROM notification_events
+    WHERE accountId = @accountId AND eventType = 'quota_reset' AND (window = @window OR (window IS NULL AND @window IS NULL)) AND id > @afterId
+    LIMIT 1
+  `).get({ accountId, window: window ?? null, afterId: lastEvent.id }) as { id: number } | undefined;
+
+  // If there's been a reset, the old event is resolved
+  if (resetAfter) return false;
+
+  // No reset — event is still unresolved, don't fire again
+  return true;
+}
+
+function rowToNotificationEvent(row: Record<string, unknown>): NotificationEvent {
+  return {
+    id: row.id as number,
+    accountId: row.accountId as string,
+    eventType: row.eventType as NotificationEventType,
+    window: row.window as NotificationEvent["window"],
+    usedPercent: row.usedPercent as number | null,
+    message: row.message as string,
+    createdAt: row.createdAt as string,
+    acknowledged: Boolean(row.acknowledged),
+    deliveredWeb: Boolean(row.deliveredWeb),
+    deliveredNative: Boolean(row.deliveredNative),
+    deliveredTelegram: Boolean(row.deliveredTelegram),
+    telegramMessageId: (row.telegramMessageId as number) ?? null,
+  };
+}
+
+export function clearNotificationEvents(): number {
+  const db = getDb();
+  const result = db.prepare("DELETE FROM notification_events").run();
+  return result.changes;
 }

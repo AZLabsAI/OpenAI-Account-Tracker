@@ -2,6 +2,7 @@
  * POST /api/accounts/[id]/quota
  *
  * Fetches live quota data from the Codex app-server and persists it.
+ * Detects quota state transitions and fires notifications.
  * The account must already be logged in (codexHomePath must have a valid auth.json).
  */
 
@@ -9,6 +10,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAccount, updateAccount } from "@/lib/db";
 import { fetchQuota } from "@/lib/codex-appserver";
 import { logInfo, logSuccess, logError } from "@/lib/logger";
+import { detectTransitions, processTransitions } from "@/lib/notifications";
+import { getNotificationSettings } from "@/lib/notify-settings";
 
 export async function POST(
   _req: NextRequest,
@@ -44,6 +47,19 @@ export async function POST(
 
     const quotaData = await fetchQuota(account.codexHomePath);
 
+    // ── Detect transitions BEFORE saving (old vs new comparison) ──────────
+    const settings = getNotificationSettings();
+    const transitions = detectTransitions(
+      account,
+      account.quotaData,
+      quotaData,
+      settings.defaultThresholds,
+    );
+
+    // Process notifications (dedup + deliver)
+    const notificationEvents = await processTransitions(account, transitions);
+
+    // ── Save new quota ────────────────────────────────────────────────────
     updateAccount(id, {
       quotaData,
       lastChecked: new Date().toISOString(),
@@ -65,7 +81,11 @@ export async function POST(
       },
     });
 
-    return NextResponse.json(quotaData);
+    return NextResponse.json({
+      ...quotaData,
+      // Include any new notification events so the client can fire Web Notifications
+      notifications: notificationEvents.length > 0 ? notificationEvents : undefined,
+    });
 
   } catch (err) {
     const durationMs = Date.now() - t0;
