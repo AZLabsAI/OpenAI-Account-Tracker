@@ -24,6 +24,10 @@ export type CodexAgent =
   | "Codex on MacBook"
   | "Codex on Ava-PC"
   | "Codex on Work-PC"
+  | "Codex CLI on MacBook"
+  | "Codex CLI on Ava-PC"
+  | "Codex CLI on Work-PC"
+  | "OpenCode on MacBook"
   | "Pi on O-Auth";
 
 export const CODEX_AGENTS: CodexAgent[] = [
@@ -32,6 +36,10 @@ export const CODEX_AGENTS: CodexAgent[] = [
   "Codex on MacBook",
   "Codex on Ava-PC",
   "Codex on Work-PC",
+  "Codex CLI on MacBook",
+  "Codex CLI on Ava-PC",
+  "Codex CLI on Work-PC",
+  "OpenCode on MacBook",
   "Pi on O-Auth",
 ];
 
