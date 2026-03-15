@@ -148,6 +148,7 @@ export function updateAccount(id: string, patch: Partial<Account>): Account | nu
   if (patch.codexHomePath      !== undefined) { fields.push("codexHomePath = @codexHomePath");           values.codexHomePath     = patch.codexHomePath ?? null; }
   if (patch.quotaData          !== undefined) { fields.push("quotaData = @quotaData");                   values.quotaData         = patch.quotaData ? JSON.stringify(patch.quotaData) : null; }
   if (patch.refreshIntervalMins !== undefined) { fields.push("refreshIntervalMins = @refreshIntervalMins"); values.refreshIntervalMins = patch.refreshIntervalMins ?? null; }
+  if (patch.avatarUrl          !== undefined) { fields.push("avatarUrl = @avatarUrl");                     values.avatarUrl         = patch.avatarUrl ?? null; }
 
   if (fields.length === 0) return null;
 

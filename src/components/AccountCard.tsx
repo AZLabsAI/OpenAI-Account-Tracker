@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Account, CODEX_AGENTS, CHATGPT_AGENTS, CodexAgent, ChatGPTAgent, ACCOUNT_TYPES, AccountType, QuotaData } from "@/types";
 import { getAccountStatus, formatDate, daysUntilExpiration } from "@/data/accounts";
 import { StatusBadge } from "./StatusBadge";
@@ -53,6 +53,7 @@ export function AccountCard({
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [flipped, setFlipped] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const [loginState, setLoginState] = useState<LoginState>("idle");
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -126,6 +127,24 @@ export function AccountCard({
   }, [account.id, onQuotaUpdated]);
 
   // ── Card border style (shared by both faces) ──────────────────────────────
+  // ── Avatar upload ──────────────────────────────────────────────────────────
+  const handleAvatarUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return;
+    // Max 512 KB for data URL storage
+    if (file.size > 512 * 1024) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      onUpdateSettings(account.id, { avatarUrl: dataUrl });
+    };
+    reader.readAsDataURL(file);
+    // Reset input so same file can be re-selected
+    e.target.value = "";
+  }, [account.id, onUpdateSettings]);
+
   const borderClass = isPinned
     ? "border-violet-500/30 hover:border-violet-500/50"
     : isStarred
@@ -190,19 +209,42 @@ export function AccountCard({
             <div className="flex items-start justify-between gap-3">
               {/* Left: avatar + name + email */}
               <div className="flex items-center gap-3 min-w-0">
-                <div
-                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${
-                    isPinned
-                      ? "bg-gradient-to-br from-violet-400 to-violet-600"
-                      : isStarred
-                        ? "bg-gradient-to-br from-amber-400 to-orange-500"
-                        : isInUse
-                          ? "bg-gradient-to-br from-blue-400 to-blue-600"
-                          : "bg-gradient-to-br from-emerald-500 to-teal-600"
+                {/* Hidden file input for avatar */}
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleAvatarUpload}
+                />
+                <button
+                  onClick={() => avatarInputRef.current?.click()}
+                  className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white overflow-hidden group/avatar cursor-pointer ${
+                    !account.avatarUrl ? (
+                      isPinned
+                        ? "bg-gradient-to-br from-violet-400 to-violet-600"
+                        : isStarred
+                          ? "bg-gradient-to-br from-amber-400 to-orange-500"
+                          : isInUse
+                            ? "bg-gradient-to-br from-blue-400 to-blue-600"
+                            : "bg-gradient-to-br from-emerald-500 to-teal-600"
+                    ) : ""
                   }`}
+                  title="Click to change avatar"
                 >
-                  {initials}
-                </div>
+                  {account.avatarUrl ? (
+                    <img src={account.avatarUrl} alt={account.name} className="h-full w-full object-cover" />
+                  ) : (
+                    initials
+                  )}
+                  {/* Upload overlay on hover */}
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover/avatar:opacity-100 transition-opacity rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-4 w-4 text-white">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" />
+                    </svg>
+                  </div>
+                </button>
                 <div className="min-w-0">
                   <h3 className="text-[15px] font-semibold text-zinc-100 truncate leading-tight">
                     {account.name}
@@ -243,27 +285,30 @@ export function AccountCard({
                   }`}
                   title={isPinned ? "Unpin account" : "Pin account"}
                 >
-                  {isPinned ? (
-                    /* Filled thumbtack / pushpin */
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
-                      <path d="M19.18 2.82a1 1 0 0 0-1.41 0L14.3 6.28l-.53-.53a1.5 1.5 0 0 0-2.12 0L8.86 8.54a1.5 1.5 0 0 0 0 2.12l.7.7-5.03 5.04a.75.75 0 1 0 1.06 1.06l5.04-5.03.7.7a1.5 1.5 0 0 0 2.12 0l2.79-2.79a1.5 1.5 0 0 0 0-2.12l-.53-.53 3.46-3.46a1 1 0 0 0 0-1.41Z" />
-                    </svg>
-                  ) : (
-                    /* Outline thumbtack / pushpin */
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 17v5" />
-                      <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16h14v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v3.76Z" />
-                    </svg>
-                  )}
+                  {/* Thumbtack: flat round head + needle */}
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" className="h-4 w-4">
+                    {isPinned ? (
+                      <>
+                        <ellipse cx="8" cy="4.5" rx="5" ry="2.5" fill="currentColor" />
+                        <path d="M6.5 6.5 8 15l1.5-8.5" fill="currentColor" />
+                      </>
+                    ) : (
+                      <>
+                        <ellipse cx="8" cy="4.5" rx="5" ry="2.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+                        <path d="M6.5 6.5 8 15l1.5-8.5" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+                      </>
+                    )}
+                  </svg>
                 </button>
                 {/* Star */}
                 <button
                   onClick={() => onToggleStar(account.id)}
-                  className={`rounded-md p-1 transition-colors ${
+                  className={`rounded-md p-1 transition-all ${
                     isStarred
-                      ? "text-amber-400 hover:text-amber-300"
+                      ? "text-amber-400 hover:text-amber-300 drop-shadow-[0_0_6px_rgba(251,191,36,0.6)]"
                       : "text-zinc-600 hover:text-zinc-400 opacity-0 group-hover:opacity-100"
                   }`}
+                  style={isStarred ? { filter: "drop-shadow(0 0 4px rgba(251,191,36,0.5)) drop-shadow(0 0 8px rgba(251,191,36,0.25))" } : undefined}
                   title={isStarred ? "Unstar account" : "Star account"}
                 >
                   {isStarred ? (
@@ -488,17 +533,23 @@ export function AccountCard({
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2.5">
                 <div
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ${
-                    isPinned
-                      ? "bg-gradient-to-br from-violet-400 to-violet-600"
-                      : isStarred
-                        ? "bg-gradient-to-br from-amber-400 to-orange-500"
-                        : isInUse
-                          ? "bg-gradient-to-br from-blue-400 to-blue-600"
-                          : "bg-gradient-to-br from-emerald-500 to-teal-600"
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white overflow-hidden ${
+                    !account.avatarUrl ? (
+                      isPinned
+                        ? "bg-gradient-to-br from-violet-400 to-violet-600"
+                        : isStarred
+                          ? "bg-gradient-to-br from-amber-400 to-orange-500"
+                          : isInUse
+                            ? "bg-gradient-to-br from-blue-400 to-blue-600"
+                            : "bg-gradient-to-br from-emerald-500 to-teal-600"
+                    ) : ""
                   }`}
                 >
-                  {initials}
+                  {account.avatarUrl ? (
+                    <img src={account.avatarUrl} alt={account.name} className="h-full w-full object-cover" />
+                  ) : (
+                    initials
+                  )}
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-zinc-100">{account.name}</h3>
