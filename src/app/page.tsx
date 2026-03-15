@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { getSortedAccounts } from "@/data/accounts";
 import { Account, CodexAgent, ChatGPTAgent, AccountType, QuotaData } from "@/types";
 import { AccountCard, DashboardStats, AddAccountCard } from "@/components";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 async function persist(id: string, patch: Partial<Account>) {
   await fetch(`/api/accounts/${id}`, {
@@ -298,9 +299,9 @@ export default function Home() {
   const signedInCount = accounts.filter((a) => a.codexHomePath).length;
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-white dark:bg-transparent text-zinc-900 dark:text-zinc-100">
       {/* Header */}
-      <header className="border-b border-zinc-800/60 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-50">
+      <header className="border-b border-zinc-200 dark:border-zinc-800/60 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md sticky top-0 z-50">
         <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
@@ -319,7 +320,7 @@ export default function Home() {
               </svg>
             </button>
             <div>
-              <h1 className="text-lg font-semibold text-zinc-100">
+              <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
                 Account Tracker
               </h1>
               <p className="text-xs text-zinc-500">
@@ -355,6 +356,9 @@ export default function Home() {
               </button>
             )}
 
+            {/* Theme toggle */}
+            <ThemeToggle />
+
             {/* Settings link */}
             <a
               href="/settings"
@@ -388,7 +392,7 @@ export default function Home() {
               {/* Search + Filter bar */}
               <div className="mb-6 space-y-3">
                 <div className="flex items-center gap-3">
-                  <h2 className="text-xl font-semibold text-zinc-100">Accounts</h2>
+                  <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">Accounts</h2>
                   <div className="flex-1" />
                   {/* Search input */}
                   <div className="relative">
@@ -405,7 +409,7 @@ export default function Home() {
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       placeholder="Search accounts…"
-                      className="w-56 rounded-lg bg-zinc-800/50 border border-zinc-700/50 pl-8 pr-3 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-zinc-500 focus:bg-zinc-800 transition-colors"
+                      className="w-56 rounded-lg bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-300 dark:border-zinc-700/50 pl-8 pr-3 py-1.5 text-xs text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 outline-none focus:border-zinc-400 dark:focus:border-zinc-500 focus:bg-zinc-50 dark:focus:bg-zinc-800 transition-colors"
                     />
                     {search && (
                       <button
@@ -439,7 +443,7 @@ export default function Home() {
                         className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
                           active
                             ? "bg-zinc-100 text-zinc-900"
-                            : "bg-zinc-800/60 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
+                            : "bg-zinc-100 dark:bg-zinc-800/60 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800"
                         }`}
                       >
                         {label}
@@ -453,7 +457,7 @@ export default function Home() {
               </div>
 
               {filtered.length === 0 && (search || filter !== "all") ? (
-                <div className="rounded-2xl border border-dashed border-zinc-800 p-16 text-center">
+                <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-800 p-16 text-center">
                   <p className="text-zinc-500 text-sm">No accounts match your search.</p>
                   <button
                     onClick={() => { setSearch(""); setFilter("all"); }}
@@ -492,7 +496,7 @@ export default function Home() {
       </main>
 
       {/* Site footer */}
-      <footer className="border-t border-zinc-800/40 py-4 mt-8">
+      <footer className="border-t border-zinc-200 dark:border-zinc-800/40 py-4 mt-8">
         <div className="mx-auto max-w-7xl px-6 flex items-center justify-between text-[11px] text-zinc-600">
           <span>v0.0.1 Beta</span>
           <span>

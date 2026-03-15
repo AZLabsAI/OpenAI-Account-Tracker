@@ -146,12 +146,12 @@ export function AccountCard({
   }, [account.id, onUpdateSettings]);
 
   const borderClass = isPinned
-    ? "border-violet-500/30 hover:border-violet-500/50"
+    ? "border-violet-300 hover:border-violet-400 dark:border-violet-500/30 dark:hover:border-violet-500/50"
     : isStarred
-      ? "border-amber-500/25 hover:border-amber-500/40"
+      ? "border-amber-300 hover:border-amber-400 dark:border-amber-500/25 dark:hover:border-amber-500/40"
       : isInUse
-        ? "border-blue-500/25 hover:border-blue-500/40"
-        : "border-zinc-800 hover:border-zinc-700";
+        ? "border-blue-300 hover:border-blue-400 dark:border-blue-500/25 dark:hover:border-blue-500/40"
+        : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700";
 
   // ── Accent strip ──────────────────────────────────────────────────────────
   const accentStrip = isPinned
@@ -170,7 +170,7 @@ export function AccountCard({
           <div className="rounded-2xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl w-full max-w-sm mx-4">
             <h3 className="text-base font-semibold text-zinc-100 mb-1">Delete account?</h3>
             <p className="text-sm text-zinc-400 mb-5">
-              <span className="font-medium text-zinc-200">{account.email}</span> will be permanently removed. This cannot be undone.
+              <span className="font-medium text-zinc-800 dark:text-zinc-200">{account.email}</span> will be permanently removed. This cannot be undone.
             </p>
             <div className="flex gap-3 justify-end">
               <button
@@ -201,7 +201,7 @@ export function AccountCard({
               FRONT FACE
               ═══════════════════════════════════════════════════════════════════ */}
           <div
-            className={`group relative rounded-2xl border p-6 bg-zinc-900/60 backdrop-blur-sm overflow-hidden [backface-visibility:hidden] ${borderClass}`}
+            className={`group relative rounded-2xl border p-6 bg-white dark:bg-zinc-900/60 shadow-sm dark:shadow-none backdrop-blur-sm overflow-hidden [backface-visibility:hidden] ${borderClass}`}
           >
             {accentStrip}
 
@@ -326,7 +326,7 @@ export function AccountCard({
             </div>
 
             {/* Divider */}
-            <div className="my-4 h-px bg-zinc-800/80" />
+            <div className="my-4 h-px bg-zinc-200 dark:bg-zinc-800/80" />
 
             {/* Details grid */}
             <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 text-sm">
@@ -419,9 +419,9 @@ export function AccountCard({
             {/* Static usage limits — only shown when no live quota data */}
             {account.usageLimits.length > 0 && !account.quotaData && (
               <>
-                <div className="my-4 h-px bg-zinc-800/80" />
+                <div className="my-4 h-px bg-zinc-200 dark:bg-zinc-800/80" />
                 <div className="space-y-3">
-                  <h4 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Usage Limits</h4>
+                  <h4 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">Usage Limits</h4>
                   {account.usageLimits.map((limit) => (
                     <UsageBar key={limit.label} limit={limit} />
                   ))}
@@ -432,7 +432,7 @@ export function AccountCard({
             {/* Live quota data */}
             {account.quotaData && (
               <>
-                <div className="my-4 h-px bg-zinc-800/80" />
+                <div className="my-4 h-px bg-zinc-200 dark:bg-zinc-800/80" />
                 <QuotaBar quotaData={account.quotaData} />
               </>
             )}
@@ -458,7 +458,7 @@ export function AccountCard({
             </div>
 
             {/* Bottom action bar */}
-            <div className="mt-4 pt-3 border-t border-zinc-800/50 flex items-center justify-between gap-2">
+            <div className="mt-4 pt-3 border-t border-zinc-200 dark:border-zinc-800/50 flex items-center justify-between gap-2">
               {/* Left: Mark In Use */}
               <button
                 onClick={() => onToggleInUse(account.id)}
@@ -499,7 +499,7 @@ export function AccountCard({
               onClick={() => setFlipped(true)}
               className="mt-3 -mx-6 -mb-6 px-6 py-3 w-[calc(100%+48px)] flex items-center justify-center gap-2 cursor-pointer
                          bg-[repeating-linear-gradient(135deg,transparent,transparent_4px,rgba(113,113,122,0.06)_4px,rgba(113,113,122,0.06)_5px)]
-                         border-t border-zinc-800/40
+                         border-t border-zinc-200 dark:border-zinc-800/40
                          text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/30
                          transition-colors group/flip"
               title="Flip card to view settings"
@@ -525,7 +525,7 @@ export function AccountCard({
               BACK FACE
               ═══════════════════════════════════════════════════════════════════ */}
           <div
-            className={`absolute inset-0 rounded-2xl border p-6 bg-zinc-900/80 backdrop-blur-sm overflow-hidden [backface-visibility:hidden] [transform:rotateY(180deg)] flex flex-col ${borderClass}`}
+            className={`absolute inset-0 rounded-2xl border p-6 bg-white dark:bg-zinc-900/80 shadow-sm dark:shadow-none backdrop-blur-sm overflow-hidden [backface-visibility:hidden] [transform:rotateY(180deg)] flex flex-col ${borderClass}`}
           >
             {accentStrip}
 
@@ -552,8 +552,8 @@ export function AccountCard({
                   )}
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-zinc-100">{account.name}</h3>
-                  <p className="text-[11px] text-zinc-500">Card Settings</p>
+                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{account.name}</h3>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-500">Card Settings</p>
                 </div>
               </div>
 
@@ -563,7 +563,7 @@ export function AccountCard({
               </svg>
             </div>
 
-            <div className="h-px bg-zinc-800/80 mb-5" />
+            <div className="h-px bg-zinc-200 dark:bg-zinc-800/80 mb-5" />
 
             {/* Settings content */}
             <div className="flex-1 space-y-5 overflow-y-auto min-h-0">
@@ -624,14 +624,14 @@ export function AccountCard({
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2 text-[12px]">
                     <span className={`inline-block h-2 w-2 rounded-full ${hasCodexHome ? "bg-emerald-400" : "bg-zinc-600"}`} />
-                    <span className={hasCodexHome ? "text-emerald-300" : "text-zinc-500"}>
+                    <span className={hasCodexHome ? "text-emerald-300" : "text-zinc-500 dark:text-zinc-500"}>
                       {hasCodexHome ? "Codex OAuth linked" : "Not linked"}
                     </span>
                   </div>
                   {account.quotaData?.fetchedAt && (
                     <div className="flex items-center gap-2 text-[12px]">
                       <span className={`inline-block h-2 w-2 rounded-full ${staleness(account.quotaData.fetchedAt) === "fresh" ? "bg-sky-400" : staleness(account.quotaData.fetchedAt) === "aging" ? "bg-amber-400" : "bg-orange-400"}`} />
-                      <span className="text-zinc-400">
+                      <span className="text-zinc-600 dark:text-zinc-400">
                         Last fetched {timeAgo(account.quotaData.fetchedAt)}
                       </span>
                     </div>
@@ -673,7 +673,7 @@ export function AccountCard({
               onClick={() => setFlipped(false)}
               className="mt-4 -mx-6 -mb-6 px-6 py-3 w-[calc(100%+48px)] flex items-center justify-center gap-2 cursor-pointer
                          bg-[repeating-linear-gradient(135deg,transparent,transparent_4px,rgba(113,113,122,0.06)_4px,rgba(113,113,122,0.06)_5px)]
-                         border-t border-zinc-800/40
+                         border-t border-zinc-200 dark:border-zinc-800/40
                          text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/30
                          transition-colors group/flip"
               title="Flip back to card"
@@ -736,7 +736,7 @@ function SignInButton({
 }) {
   if (state === "waiting") {
     return (
-      <span className="flex items-center gap-1.5 text-xs text-zinc-400">
+      <span className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
         <span className="inline-block h-3 w-3 animate-spin rounded-full border border-zinc-600 border-t-zinc-300" />
         Waiting for browser…
       </span>

@@ -25,7 +25,7 @@ export function AddAccountCard({ onAdded }: Props) {
       {/* Ghost trigger card */}
       <button
         onClick={() => setOpen(true)}
-        className="group relative flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-zinc-700/40 bg-transparent p-6 text-center transition-all duration-300 hover:border-zinc-500/60 hover:bg-zinc-900/40 min-h-[120px] w-full"
+        className="group relative flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700/40 bg-transparent p-6 text-center transition-all duration-300 hover:border-zinc-400 dark:hover:border-zinc-500/60 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 min-h-[120px] w-full"
       >
         {/* Plus ring */}
         <div className="flex h-12 w-12 items-center justify-center rounded-full border border-zinc-700/50 bg-zinc-800/40 text-zinc-500 transition-all duration-300 group-hover:border-zinc-500/70 group-hover:bg-zinc-700/40 group-hover:text-zinc-300 group-hover:scale-110">
@@ -107,7 +107,7 @@ function AddAccountModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-full max-w-md rounded-2xl border border-zinc-700/60 bg-zinc-900 shadow-2xl shadow-black/50 overflow-hidden">
+      <div className="w-full max-w-md rounded-2xl border border-zinc-200 dark:border-zinc-700/60 bg-white dark:bg-zinc-900 shadow-2xl shadow-black/10 dark:shadow-black/50 overflow-hidden">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-800">
