@@ -28,7 +28,7 @@ export type CodexAgent =
   | "Codex CLI on Ava-PC"
   | "Codex CLI on Work-PC"
   | "OpenCode on MacBook"
-  | "Pi on O-Auth";
+  | "Pi Agent on MacBook";
 
 export const CODEX_AGENTS: CodexAgent[] = [
   "Eve",
@@ -40,7 +40,7 @@ export const CODEX_AGENTS: CodexAgent[] = [
   "Codex CLI on Ava-PC",
   "Codex CLI on Work-PC",
   "OpenCode on MacBook",
-  "Pi on O-Auth",
+  "Pi Agent on MacBook",
 ];
 
 /** ChatGPT client devices an account can be assigned to. */
