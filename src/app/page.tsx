@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { getSortedAccounts } from "@/data/accounts";
 import { Account, CodexAgent, ChatGPTAgent, AccountType, QuotaData } from "@/types";
 import { AccountCard, DashboardStats, AddAccountCard } from "@/components";
@@ -13,10 +13,24 @@ async function persist(id: string, patch: Partial<Account>) {
   });
 }
 
+type Filter = "all" | "in-use" | "starred" | "pinned" | "has-quota" | "no-quota";
+
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: "all",       label: "All" },
+  { key: "in-use",    label: "In Use" },
+  { key: "starred",   label: "Starred" },
+  { key: "pinned",    label: "Pinned" },
+  { key: "has-quota", label: "Has Quota" },
+  { key: "no-quota",  label: "No Quota" },
+];
+
 export default function Home() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
-  const sorted = getSortedAccounts(accounts);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+  const [refreshingAll, setRefreshingAll] = useState(false);
+  const [refreshProgress, setRefreshProgress] = useState<{ done: number; total: number } | null>(null);
 
   // Load from SQLite on mount
   useEffect(() => {
@@ -27,6 +41,71 @@ export default function Home() {
         setLoading(false);
       });
   }, []);
+
+  // ── Derived: sorted → filtered → searched ─────────────────────────────────
+  const sorted = getSortedAccounts(accounts);
+
+  const filtered = useMemo(() => {
+    let result = sorted;
+
+    // Filter
+    if (filter === "in-use")    result = result.filter((a) => a.inUse);
+    if (filter === "starred")   result = result.filter((a) => a.starred);
+    if (filter === "pinned")    result = result.filter((a) => a.pinned);
+    if (filter === "has-quota") result = result.filter((a) => a.quotaData);
+    if (filter === "no-quota")  result = result.filter((a) => !a.quotaData);
+
+    // Search
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(
+        (a) =>
+          a.name.toLowerCase().includes(q) ||
+          a.email.toLowerCase().includes(q) ||
+          (a.accountType ?? "").toLowerCase().includes(q) ||
+          a.subscription.toLowerCase().includes(q),
+      );
+    }
+
+    return result;
+  }, [sorted, filter, search]);
+
+  // ── Refresh All ────────────────────────────────────────────────────────────
+  const refreshAll = useCallback(async () => {
+    const eligible = accounts.filter((a) => a.codexHomePath);
+    if (eligible.length === 0) return;
+
+    setRefreshingAll(true);
+    setRefreshProgress({ done: 0, total: eligible.length });
+
+    for (let i = 0; i < eligible.length; i++) {
+      const acc = eligible[i];
+      try {
+        const res = await fetch(`/api/accounts/${acc.id}/quota`, {
+          method: "POST",
+          signal: AbortSignal.timeout(30_000),
+        });
+        if (res.ok) {
+          const quotaData: QuotaData = await res.json();
+          setAccounts((prev) =>
+            prev.map((a) =>
+              a.id === acc.id
+                ? { ...a, quotaData, lastChecked: new Date().toISOString() }
+                : a,
+            ),
+          );
+        }
+      } catch {
+        // Skip failed ones
+      }
+      setRefreshProgress({ done: i + 1, total: eligible.length });
+    }
+
+    setRefreshingAll(false);
+    setRefreshProgress(null);
+  }, [accounts]);
+
+  // ── Account mutations ─────────────────────────────────────────────────────
 
   const toggleStar = useCallback((id: string) => {
     setAccounts((prev) =>
@@ -59,7 +138,6 @@ export default function Home() {
       let nextOrder = 0;
 
       if (isPinning) {
-        // Assign the next pinOrder after all currently pinned accounts
         const maxPinOrder = prev
           .filter((a) => a.pinned)
           .reduce((max, a) => Math.max(max, a.pinOrder ?? 0), 0);
@@ -129,6 +207,9 @@ export default function Home() {
     setAccounts((prev) => [...prev, account]);
   }, []);
 
+  // Count signed-in accounts for the Refresh All button
+  const signedInCount = accounts.filter((a) => a.codexHomePath).length;
+
   return (
     <div className="min-h-screen">
       {/* Header */}
@@ -153,9 +234,37 @@ export default function Home() {
             </div>
           </div>
 
-          <span className="text-xs text-zinc-600 font-mono">
-            {accounts.length} account{accounts.length !== 1 && "s"}
-          </span>
+          <div className="flex items-center gap-3">
+            {/* Refresh All */}
+            {signedInCount > 0 && (
+              <button
+                onClick={refreshAll}
+                disabled={refreshingAll}
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 border border-sky-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {refreshingAll ? (
+                  <>
+                    <span className="inline-block h-3 w-3 animate-spin rounded-full border border-sky-800 border-t-sky-400" />
+                    {refreshProgress
+                      ? `${refreshProgress.done}/${refreshProgress.total}`
+                      : "Refreshing…"
+                    }
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+                      <path fillRule="evenodd" d="M13.836 2.477a.75.75 0 0 1 .75.75v3.182a.75.75 0 0 1-.75.75h-3.182a.75.75 0 0 1 0-1.5h1.37l-.84-.841a4.5 4.5 0 0 0-7.08.932.75.75 0 0 1-1.3-.75 6 6 0 0 1 9.44-1.242l.842.84V3.227a.75.75 0 0 1 .75-.75Zm-.911 7.5A.75.75 0 0 1 13.199 11a6 6 0 0 1-9.44 1.241l-.84-.84v1.371a.75.75 0 0 1-1.5 0V9.591a.75.75 0 0 1 .75-.75H5.35a.75.75 0 0 1 0 1.5H3.98l.841.841a4.5 4.5 0 0 0 7.08-.932.75.75 0 0 1 1.024-.273Z" clipRule="evenodd" />
+                    </svg>
+                    Refresh All
+                  </>
+                )}
+              </button>
+            )}
+
+            <span className="text-xs text-zinc-600 font-mono">
+              {accounts.length} account{accounts.length !== 1 && "s"}
+            </span>
+          </div>
         </div>
       </header>
 
@@ -171,20 +280,86 @@ export default function Home() {
             <DashboardStats accounts={accounts} />
 
             <section>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-zinc-100">Accounts</h2>
-                <p className="text-xs text-zinc-600">
-                  Click ☆ to star · Click 📌 to pin · Click &ldquo;Mark In Use&rdquo; for active sessions
-                </p>
+              {/* Search + Filter bar */}
+              <div className="mb-6 space-y-3">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-semibold text-zinc-100">Accounts</h2>
+                  <div className="flex-1" />
+                  {/* Search input */}
+                  <div className="relative">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500 pointer-events-none"
+                    >
+                      <path fillRule="evenodd" d="M9.965 11.026a5 5 0 1 1 1.06-1.06l2.755 2.754a.75.75 0 1 1-1.06 1.06l-2.755-2.754ZM10.5 7a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Z" clipRule="evenodd" />
+                    </svg>
+                    <input
+                      type="text"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Search accounts…"
+                      className="w-56 rounded-lg bg-zinc-800/50 border border-zinc-700/50 pl-8 pr-3 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-zinc-500 focus:bg-zinc-800 transition-colors"
+                    />
+                    {search && (
+                      <button
+                        onClick={() => setSearch("")}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3">
+                          <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Filter pills */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {FILTERS.map(({ key, label }) => {
+                    const active = filter === key;
+                    // Count for each filter
+                    let count = accounts.length;
+                    if (key === "in-use")    count = accounts.filter((a) => a.inUse).length;
+                    if (key === "starred")   count = accounts.filter((a) => a.starred).length;
+                    if (key === "pinned")    count = accounts.filter((a) => a.pinned).length;
+                    if (key === "has-quota") count = accounts.filter((a) => a.quotaData).length;
+                    if (key === "no-quota")  count = accounts.filter((a) => !a.quotaData).length;
+
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => setFilter(active ? "all" : key)}
+                        className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                          active
+                            ? "bg-zinc-100 text-zinc-900"
+                            : "bg-zinc-800/60 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
+                        }`}
+                      >
+                        {label}
+                        <span className={`ml-1.5 ${active ? "text-zinc-500" : "text-zinc-600"}`}>
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              {accounts.length === 0 ? (
-                <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
-                  <AddAccountCard onAdded={addAccount} />
+              {filtered.length === 0 && (search || filter !== "all") ? (
+                <div className="rounded-2xl border border-dashed border-zinc-800 p-16 text-center">
+                  <p className="text-zinc-500 text-sm">No accounts match your search.</p>
+                  <button
+                    onClick={() => { setSearch(""); setFilter("all"); }}
+                    className="mt-2 text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+                  >
+                    Clear filters
+                  </button>
                 </div>
               ) : (
                 <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
-                  {sorted.map((account) => (
+                  {filtered.map((account) => (
                     <AccountCard
                       key={account.id}
                       account={account}

@@ -414,6 +414,7 @@ export function AccountCard({
             {hasCodexHome && (
               <RefreshQuotaButton
                 state={quotaState}
+                fetchedAt={account.quotaData?.fetchedAt}
                 onClick={handleRefreshQuota}
               />
             )}
@@ -480,21 +481,44 @@ function SignInButton({
   );
 }
 
-// ─── Refresh Quota Button ─────────────────────────────────────────────────────
+// ─── Refresh Quota Button (stale-aware: sky → amber → orange) ─────────────────
+
+function staleness(fetchedAt?: string): "fresh" | "aging" | "stale" {
+  if (!fetchedAt) return "stale";
+  const ageMs = Date.now() - new Date(fetchedAt).getTime();
+  const ageMins = ageMs / 60_000;
+  if (ageMins < 30)  return "fresh";  // < 30 min
+  if (ageMins < 120) return "aging";  // 30 min – 2 hours
+  return "stale";                     // > 2 hours
+}
+
+const STALE_STYLES = {
+  fresh: "bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 border-sky-500/20",
+  aging: "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border-amber-500/20",
+  stale: "bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 border-orange-500/20",
+};
 
 function RefreshQuotaButton({
   state,
+  fetchedAt,
   onClick,
 }: {
   state: QuotaState;
+  fetchedAt?: string;
   onClick: () => void;
 }) {
+  const s = staleness(fetchedAt);
+
   return (
     <button
       onClick={onClick}
       disabled={state === "loading"}
-      className={`flex items-center gap-1.5 text-xs font-medium rounded-md px-2.5 py-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 border border-sky-500/20`}
-      title="Fetch live quota from Codex"
+      className={`flex items-center gap-1.5 text-xs font-medium rounded-md px-2.5 py-1 border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${STALE_STYLES[s]}`}
+      title={
+        s === "fresh" ? "Quota is fresh" :
+        s === "aging" ? "Quota is getting stale — consider refreshing" :
+        "Quota is stale — refresh recommended"
+      }
     >
       {state === "loading" ? (
         <>
