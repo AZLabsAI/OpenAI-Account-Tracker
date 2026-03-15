@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { getSortedAccounts } from "@/data/accounts";
 import { Account, CodexAgent, ChatGPTAgent, AccountType, QuotaData } from "@/types";
-import { AccountCard, DashboardStats } from "@/components";
+import { AccountCard, DashboardStats, AddAccountCard } from "@/components";
 
 async function persist(id: string, patch: Partial<Account>) {
   await fetch(`/api/accounts/${id}`, {
@@ -125,6 +125,10 @@ export default function Home() {
     );
   }, []);
 
+  const addAccount = useCallback((account: Account) => {
+    setAccounts((prev) => [...prev, account]);
+  }, []);
+
   return (
     <div className="min-h-screen">
       {/* Header */}
@@ -175,8 +179,8 @@ export default function Home() {
               </div>
 
               {accounts.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-zinc-800 p-16 text-center">
-                  <p className="text-zinc-500">No accounts yet.</p>
+                <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+                  <AddAccountCard onAdded={addAccount} />
                 </div>
               ) : (
                 <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
@@ -194,6 +198,7 @@ export default function Home() {
                       onQuotaUpdated={updateQuota}
                     />
                   ))}
+                  <AddAccountCard onAdded={addAccount} />
                 </div>
               )}
             </section>

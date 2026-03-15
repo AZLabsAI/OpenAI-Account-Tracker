@@ -166,3 +166,34 @@ export function deleteAccount(id: string): boolean {
   const result = db.prepare("DELETE FROM accounts WHERE id = @id").run({ id });
   return result.changes > 0;
 }
+
+export function createAccount(data: {
+  name: string;
+  email: string;
+  subscription: string;
+  expirationDate: string;
+  accountType?: string;
+}): Account {
+  const db = getDb();
+  const id = `acc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  db.prepare(`
+    INSERT INTO accounts (
+      id, name, email, subscription, expirationDate,
+      usageLimits, starred, inUse, pinned, pinOrder,
+      codexAssignedTo, chatgptAssignedTo, accountType
+    ) VALUES (
+      @id, @name, @email, @subscription, @expirationDate,
+      '[]', 0, 0, 0, 0,
+      '[]', '[]', @accountType
+    )
+  `).run({
+    id,
+    name:           data.name,
+    email:          data.email,
+    subscription:   data.subscription,
+    expirationDate: data.expirationDate,
+    accountType:    data.accountType ?? null,
+  });
+  const row = db.prepare("SELECT * FROM accounts WHERE id = @id").get({ id }) as Record<string, unknown>;
+  return rowToAccount(row);
+}
