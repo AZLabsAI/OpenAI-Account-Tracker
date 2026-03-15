@@ -2,71 +2,95 @@
  * POST /api/accounts/[id]/login
  *
  * Starts the Codex OAuth browser login flow for one account.
- * The account must have a `codexHomePath` set in the DB first.
- *
- * Body: { codexHomePath?: string }
- *   — if provided, saves it to the account before starting login
- *   — if omitted, uses the existing codexHomePath from the DB
- *
- * This is a long-running request (waits up to 5 min for browser login).
- * The client should set a long timeout or use the SSE endpoint instead.
- *
- * Response: { success: true, email?: string } | { success: false, error: string }
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getAccount, updateAccount } from "@/lib/db";
 import { loginAccount, fetchQuota } from "@/lib/codex-appserver";
+import { logInfo, logSuccess, logWarn, logError } from "@/lib/logger";
 import { homedir } from "os";
 import { mkdirSync } from "fs";
 import path from "path";
 
-export const maxDuration = 310; // 5 min + buffer
+export const maxDuration = 310;
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const t0 = Date.now();
+
   try {
     const { id } = await params;
     const body = (await req.json().catch(() => ({}))) as { codexHomePath?: string };
 
     const account = getAccount(id);
     if (!account) {
+      logError("login", `Login failed — account not found: ${id}`, { accountId: id });
       return NextResponse.json({ error: "Account not found" }, { status: 404 });
     }
 
-    // Determine the codexHomePath to use
     let codexHomePath = body.codexHomePath ?? account.codexHomePath;
 
-    // If still not set, auto-generate a default path
     if (!codexHomePath) {
       codexHomePath = path.join(homedir(), ".codex-accounts", id);
     }
 
-    // Ensure the directory exists
     mkdirSync(codexHomePath, { recursive: true });
-
-    // Persist the path in the DB
     updateAccount(id, { codexHomePath });
 
-    // Start the OAuth flow — this opens the browser and waits for completion
+    logInfo("login", `OAuth login started for ${account.email} — waiting for browser…`, {
+      accountId: id,
+      accountEmail: account.email,
+      detail: { codexHomePath },
+    });
+
     const result = await loginAccount(codexHomePath, 5 * 60 * 1000);
 
     if (!result.success) {
+      logError("login", `OAuth login failed for ${account.email}: ${result.error}`, {
+        accountId: id,
+        accountEmail: account.email,
+        durationMs: Date.now() - t0,
+        detail: result.error,
+      });
       return NextResponse.json({ success: false, error: result.error }, { status: 400 });
     }
 
-    // Login succeeded — immediately fetch quota to confirm + get email/plan
+    logSuccess("login", `OAuth login succeeded for ${account.email}`, {
+      accountId: id,
+      accountEmail: account.email,
+      durationMs: Date.now() - t0,
+    });
+
+    // Immediately fetch quota
     let quotaData;
     try {
+      logInfo("quota", `Post-login quota fetch for ${account.email}…`, {
+        accountId: id,
+        accountEmail: account.email,
+      });
+
       quotaData = await fetchQuota(codexHomePath);
       updateAccount(id, {
         quotaData,
         lastChecked: new Date().toISOString(),
       });
+
+      const primaryLeft = quotaData.primary ? `${100 - quotaData.primary.usedPercent}%` : "n/a";
+      const weeklyLeft = quotaData.secondary ? `${100 - quotaData.secondary.usedPercent}%` : "n/a";
+
+      logSuccess("quota", `Post-login quota for ${account.email} — 5h: ${primaryLeft}, weekly: ${weeklyLeft}`, {
+        accountId: id,
+        accountEmail: account.email,
+        detail: { planType: quotaData.planType, primary: quotaData.primary, secondary: quotaData.secondary },
+      });
     } catch (qErr) {
-      console.warn("[login] quota fetch after login failed (non-fatal):", qErr);
+      logWarn("quota", `Post-login quota fetch failed for ${account.email} (non-fatal): ${qErr instanceof Error ? qErr.message : String(qErr)}`, {
+        accountId: id,
+        accountEmail: account.email,
+        detail: qErr instanceof Error ? qErr.stack : String(qErr),
+      });
     }
 
     return NextResponse.json({
@@ -78,7 +102,14 @@ export async function POST(
     });
 
   } catch (err) {
-    console.error("[POST /api/accounts/[id]/login]", err);
+    const { id } = await params;
+    const account = getAccount(id);
+    logError("login", `Login crashed for ${account?.email ?? id}: ${err instanceof Error ? err.message : String(err)}`, {
+      accountId: id,
+      accountEmail: account?.email,
+      durationMs: Date.now() - t0,
+      detail: err instanceof Error ? err.stack ?? err.message : String(err),
+    });
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Login failed" },
       { status: 500 },
