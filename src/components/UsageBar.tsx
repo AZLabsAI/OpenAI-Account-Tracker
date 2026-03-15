@@ -21,7 +21,7 @@ export function UsageBar({ limit }: StaticProps) {
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between text-sm">
-        <span className="text-zinc-400 font-medium">{limit.label}</span>
+        <span className="text-zinc-600 dark:text-zinc-400 font-medium">{limit.label}</span>
         <span className={`font-mono font-semibold ${textColor}`}>{pct}%</span>
       </div>
       <BarTrack remainingPct={pct} barColor={barColor} />
@@ -52,13 +52,13 @@ export function QuotaBar({ quotaData }: QuotaBarProps) {
     <div className="space-y-3">
       {/* Header row */}
       <div className="flex items-center justify-between">
-        <h4 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+        <h4 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
           Live Quota
           {planType && (
-            <span className="ml-1.5 normal-case font-normal text-zinc-600">· {planType}</span>
+            <span className="ml-1.5 normal-case font-normal text-zinc-500 dark:text-zinc-600">· {planType}</span>
           )}
         </h4>
-        <span className="text-[10px] text-zinc-600">{fetchedLabel}</span>
+        <span className="text-[10px] text-zinc-500 dark:text-zinc-600">{fetchedLabel}</span>
       </div>
 
       {primary && (
@@ -98,7 +98,7 @@ function QuotaWindow({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between text-sm">
-        <span className="text-zinc-400 font-medium text-[13px]">{label}</span>
+        <span className="text-zinc-600 dark:text-zinc-400 font-medium text-[13px]">{label}</span>
         <span className={`font-mono font-semibold text-[13px] ${textColor}`}>
           {remainingPct}% left
         </span>
@@ -116,7 +116,7 @@ function QuotaWindow({
 
 function BarTrack({ remainingPct, barColor }: { remainingPct: number; barColor: string }) {
   return (
-    <div className="h-2 w-full rounded-full bg-zinc-800 overflow-hidden">
+    <div className="h-2 w-full rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
       <div
         className={`h-full rounded-full transition-all duration-500 ease-out ${barColor}`}
         style={{ width: `${remainingPct}%` }}

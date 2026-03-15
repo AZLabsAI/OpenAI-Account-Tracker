@@ -323,7 +323,7 @@ export default function Home() {
               <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
                 Account Tracker
               </h1>
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-zinc-400 dark:text-zinc-500">
                 OpenAI subscription management
               </p>
             </div>
@@ -362,7 +362,7 @@ export default function Home() {
             {/* Settings link */}
             <a
               href="/settings"
-              className="rounded-lg p-2 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60 transition-colors"
+              className="rounded-lg p-2 text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
               title="Settings & Logs"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
@@ -370,7 +370,7 @@ export default function Home() {
               </svg>
             </a>
 
-            <span className="text-xs text-zinc-600 font-mono">
+            <span className="text-xs text-zinc-400 dark:text-zinc-600 font-mono">
               {accounts.length} account{accounts.length !== 1 && "s"}
             </span>
           </div>
@@ -382,7 +382,7 @@ export default function Home() {
 
         {loading ? (
           <div className="flex items-center justify-center py-32">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-700 border-t-zinc-400" />
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-zinc-600 dark:border-t-zinc-400" />
           </div>
         ) : (
           <>
@@ -497,7 +497,7 @@ export default function Home() {
 
       {/* Site footer */}
       <footer className="border-t border-zinc-200 dark:border-zinc-800/40 py-4 mt-8">
-        <div className="mx-auto max-w-7xl px-6 flex items-center justify-between text-[11px] text-zinc-600">
+        <div className="mx-auto max-w-7xl px-6 flex items-center justify-between text-[11px] text-zinc-400 dark:text-zinc-600">
           <span>v0.0.1 Beta</span>
           <span>
             Created by{" "}
@@ -505,7 +505,7 @@ export default function Home() {
               href="https://azlabs.co.za"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-zinc-500 hover:text-zinc-300 transition-colors"
+              className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
             >
               AZ Labs
             </a>

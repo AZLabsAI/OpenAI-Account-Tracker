@@ -168,14 +168,14 @@ export function AccountCard({
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="rounded-2xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl w-full max-w-sm mx-4">
-            <h3 className="text-base font-semibold text-zinc-100 mb-1">Delete account?</h3>
+            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Delete account?</h3>
             <p className="text-sm text-zinc-400 mb-5">
               <span className="font-medium text-zinc-800 dark:text-zinc-200">{account.email}</span> will be permanently removed. This cannot be undone.
             </p>
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => setConfirmDelete(false)}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+                className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors"
               >
                 Cancel
               </button>
@@ -246,7 +246,7 @@ export function AccountCard({
                   </div>
                 </button>
                 <div className="min-w-0">
-                  <h3 className="text-[15px] font-semibold text-zinc-100 truncate leading-tight">
+                  <h3 className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-100 truncate leading-tight">
                     {account.name}
                   </h3>
                   <button
@@ -255,7 +255,7 @@ export function AccountCard({
                       setCopied(true);
                       setTimeout(() => setCopied(false), 1500);
                     }}
-                    className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 truncate mt-0.5 transition-colors group/email"
+                    className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 truncate mt-0.5 transition-colors group/email"
                     title="Click to copy email"
                   >
                     <span className="truncate">{account.email}</span>
@@ -331,21 +331,21 @@ export function AccountCard({
             {/* Details grid */}
             <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 text-sm">
               <div>
-                <span className="text-zinc-500 text-xs">Subscription</span>
-                <p className="font-medium text-zinc-200 text-[13px]">{account.subscription}</p>
+                <span className="text-zinc-500 dark:text-zinc-500 text-xs">Subscription</span>
+                <p className="font-medium text-zinc-800 dark:text-zinc-200 text-[13px]">{account.subscription}</p>
               </div>
               <div>
-                <span className="text-zinc-500 text-xs">Expires</span>
-                <p className="font-medium text-zinc-200 text-[13px]">{formatDate(account.expirationDate)}</p>
+                <span className="text-zinc-500 dark:text-zinc-500 text-xs">Expires</span>
+                <p className="font-medium text-zinc-800 dark:text-zinc-200 text-[13px]">{formatDate(account.expirationDate)}</p>
               </div>
               <div>
-                <span className="text-zinc-500 text-xs">Days Remaining</span>
-                <p className="font-mono font-semibold text-zinc-200 text-[13px]">{daysLeft > 0 ? daysLeft : 0}</p>
+                <span className="text-zinc-500 dark:text-zinc-500 text-xs">Days Remaining</span>
+                <p className="font-mono font-semibold text-zinc-800 dark:text-zinc-200 text-[13px]">{daysLeft > 0 ? daysLeft : 0}</p>
               </div>
               <div className="space-y-2.5">
                 {/* Codex O-Auth – multi */}
                 <div>
-                  <span className="text-zinc-500 text-xs">Codex O-Auth</span>
+                  <span className="text-zinc-500 dark:text-zinc-500 text-xs">Codex O-Auth</span>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {(account.codexAssignedTo ?? []).map((agent) => (
                       <span key={agent} className="inline-flex items-center gap-1 rounded-md bg-violet-500/15 border border-violet-500/25 px-1.5 py-0.5 text-[11px] font-medium text-violet-300">
@@ -363,7 +363,7 @@ export function AccountCard({
                           if (!e.target.value) return;
                           onAssignCodex(account.id, [...(account.codexAssignedTo ?? []), e.target.value as CodexAgent]);
                         }}
-                        className="inline-flex items-center rounded-md border border-zinc-700/60 bg-zinc-800/70 px-1.5 py-0.5 text-[11px] font-medium text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 outline-none transition-colors appearance-none cursor-pointer"
+                        className="inline-flex items-center rounded-md border border-zinc-300 dark:border-zinc-700/60 bg-zinc-100 dark:bg-zinc-800/70 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:border-zinc-400 dark:hover:border-zinc-600 outline-none transition-colors appearance-none cursor-pointer"
                         style={{ backgroundImage: "none", width: "auto" }}
                       >
                         <option value="">+ Add</option>
@@ -376,7 +376,7 @@ export function AccountCard({
                 </div>
                 {/* ChatGPT Assigned To – multi */}
                 <div>
-                  <span className="text-zinc-500 text-xs">ChatGPT Assigned To</span>
+                  <span className="text-zinc-500 dark:text-zinc-500 text-xs">ChatGPT Assigned To</span>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {(account.chatgptAssignedTo ?? []).map((agent) => (
                       <span key={agent} className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 border border-emerald-500/25 px-1.5 py-0.5 text-[11px] font-medium text-emerald-300">
@@ -394,7 +394,7 @@ export function AccountCard({
                           if (!e.target.value) return;
                           onAssignChatGPT(account.id, [...(account.chatgptAssignedTo ?? []), e.target.value as ChatGPTAgent]);
                         }}
-                        className="inline-flex items-center rounded-md border border-zinc-700/60 bg-zinc-800/70 px-1.5 py-0.5 text-[11px] font-medium text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 outline-none transition-colors appearance-none cursor-pointer"
+                        className="inline-flex items-center rounded-md border border-zinc-300 dark:border-zinc-700/60 bg-zinc-100 dark:bg-zinc-800/70 px-1.5 py-0.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:border-zinc-400 dark:hover:border-zinc-600 outline-none transition-colors appearance-none cursor-pointer"
                         style={{ backgroundImage: "none", width: "auto" }}
                       >
                         <option value="">+ Add</option>
@@ -408,8 +408,8 @@ export function AccountCard({
               </div>
               {account.lastChecked && (
                 <div>
-                  <span className="text-zinc-500 text-xs">Last Checked</span>
-                  <p className="text-zinc-400 text-[13px]">
+                  <span className="text-zinc-500 dark:text-zinc-500 text-xs">Last Checked</span>
+                  <p className="text-zinc-600 dark:text-zinc-400 text-[13px]">
                     {new Date(account.lastChecked).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                   </p>
                 </div>
@@ -447,7 +447,7 @@ export function AccountCard({
               <select
                 value={account.accountType ?? ""}
                 onChange={(e) => onSetAccountType(account.id, e.target.value ? (e.target.value as AccountType) : undefined)}
-                className="block w-fit rounded-lg bg-zinc-800/40 px-3 py-2 text-xs text-zinc-500 border-0 outline-none hover:bg-zinc-800/60 focus:bg-zinc-800/60 transition-colors appearance-none cursor-pointer"
+                className="block w-fit rounded-lg bg-zinc-100 dark:bg-zinc-800/40 px-3 py-2 text-xs text-zinc-600 dark:text-zinc-500 border-0 outline-none hover:bg-zinc-200 dark:hover:bg-zinc-800/60 focus:bg-zinc-200 dark:focus:bg-zinc-800/60 transition-colors appearance-none cursor-pointer"
                 style={{ backgroundImage: dropdownArrow, backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center", paddingRight: "24px" }}
               >
                 <option value="">— Account type —</option>
@@ -465,7 +465,7 @@ export function AccountCard({
                 className={`text-xs font-medium rounded-md px-2.5 py-1 transition-colors ${
                   isInUse
                     ? "bg-blue-500/15 text-blue-400 hover:bg-blue-500/25"
-                    : "bg-zinc-800/60 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
+                    : "bg-zinc-100 dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800"
                 }`}
               >
                 {isInUse ? "✓ In Use" : "Mark In Use"}
@@ -500,7 +500,7 @@ export function AccountCard({
               className="mt-3 -mx-6 -mb-6 px-6 py-3 w-[calc(100%+48px)] flex items-center justify-center gap-2 cursor-pointer
                          bg-[repeating-linear-gradient(135deg,transparent,transparent_4px,rgba(113,113,122,0.06)_4px,rgba(113,113,122,0.06)_5px)]
                          border-t border-zinc-200 dark:border-zinc-800/40
-                         text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/30
+                         text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/30
                          transition-colors group/flip"
               title="Flip card to view settings"
             >
@@ -591,10 +591,10 @@ export function AccountCard({
                         }}
                         className={`rounded-lg px-2.5 py-2 text-[11px] font-medium border transition-colors text-left
                           ${isActive
-                            ? "bg-sky-500/15 text-sky-300 border-sky-500/30"
+                            ? "bg-sky-500/15 text-sky-400 dark:text-sky-300 border-sky-500/30"
                             : isDisabled
-                              ? "bg-zinc-800/20 text-zinc-700 border-zinc-800/30 cursor-not-allowed"
-                              : "bg-zinc-800/40 text-zinc-400 border-zinc-700/40 hover:border-zinc-600 hover:text-zinc-200 cursor-pointer"
+                              ? "bg-zinc-100 dark:bg-zinc-800/20 text-zinc-400 dark:text-zinc-700 border-zinc-200 dark:border-zinc-800/30 cursor-not-allowed"
+                              : "bg-zinc-100 dark:bg-zinc-800/40 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-700/40 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 cursor-pointer"
                           }`}
                         title={isDisabled ? "Sign in first to enable auto-refresh" : ""}
                       >
@@ -645,7 +645,7 @@ export function AccountCard({
                     </div>
                   )}
                   {account.codexHomePath && (
-                    <div className="mt-2 rounded-md bg-zinc-800/40 px-2.5 py-1.5 text-[10px] font-mono text-zinc-600 truncate" title={account.codexHomePath}>
+                    <div className="mt-2 rounded-md bg-zinc-100 dark:bg-zinc-800/40 px-2.5 py-1.5 text-[10px] font-mono text-zinc-600 truncate" title={account.codexHomePath}>
                       {account.codexHomePath}
                     </div>
                   )}
@@ -674,7 +674,7 @@ export function AccountCard({
               className="mt-4 -mx-6 -mb-6 px-6 py-3 w-[calc(100%+48px)] flex items-center justify-center gap-2 cursor-pointer
                          bg-[repeating-linear-gradient(135deg,transparent,transparent_4px,rgba(113,113,122,0.06)_4px,rgba(113,113,122,0.06)_5px)]
                          border-t border-zinc-200 dark:border-zinc-800/40
-                         text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/30
+                         text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/30
                          transition-colors group/flip"
               title="Flip back to card"
             >
@@ -759,7 +759,7 @@ function SignInButton({
       onClick={onClick}
       className={`flex items-center gap-1.5 text-xs font-medium rounded-md px-2.5 py-1 transition-colors ${
         hasCodexHome
-          ? "bg-zinc-800/60 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/60"
+          ? "bg-zinc-100 dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700/60"
           : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20"
       }`}
       title={hasCodexHome ? "Re-authenticate this account" : "Sign in to enable live quota tracking"}
