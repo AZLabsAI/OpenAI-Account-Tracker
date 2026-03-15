@@ -308,7 +308,7 @@ export default function Home() {
               className="flex h-9 w-9 items-center justify-center rounded-lg bg-white cursor-pointer hover:shadow-lg hover:shadow-white/10 transition-shadow"
               title="🥚"
               style={{
-                animation: spinLevel > 0 ? `spin ${Math.max(2 - spinLevel * 0.25, 0.15)}s linear infinite` : undefined,
+                animation: `spin ${spinLevel === 0 ? 8 : Math.max(2 - spinLevel * 0.25, 0.15)}s linear infinite`,
               }}
             >
               <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
