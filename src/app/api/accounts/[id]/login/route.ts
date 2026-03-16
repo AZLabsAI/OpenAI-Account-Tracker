@@ -7,6 +7,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAccount, updateAccount } from "@/lib/db";
 import { loginAccount, fetchQuota } from "@/lib/codex-appserver";
+import { detectTransitions, processTransitions } from "@/lib/notifications";
+import { getNotificationSettings } from "@/lib/notify-settings";
 import { logInfo, logSuccess, logWarn, logError } from "@/lib/logger";
 import { homedir } from "os";
 import { mkdirSync } from "fs";
@@ -65,6 +67,7 @@ export async function POST(
 
     // Immediately fetch quota
     let quotaData;
+    let notificationEvents: Awaited<ReturnType<typeof processTransitions>> | undefined;
     try {
       logInfo("quota", `Post-login quota fetch for ${account.email}…`, {
         accountId: id,
@@ -72,6 +75,15 @@ export async function POST(
       });
 
       quotaData = await fetchQuota(codexHomePath);
+      const settings = getNotificationSettings();
+      const transitions = detectTransitions(
+        account,
+        account.quotaData,
+        quotaData,
+        settings.defaultThresholds,
+      );
+      notificationEvents = await processTransitions(account, transitions);
+
       updateAccount(id, {
         quotaData,
         lastChecked: new Date().toISOString(),
@@ -99,6 +111,7 @@ export async function POST(
       email: quotaData?.email,
       planType: quotaData?.planType,
       quotaData,
+      notifications: notificationEvents?.length ? notificationEvents : undefined,
     });
 
   } catch (err) {

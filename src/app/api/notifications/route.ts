@@ -11,6 +11,7 @@ import {
   clearNotificationEvents,
   getUnacknowledgedCount,
   getDb,
+  markNotificationDelivered,
 } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
@@ -26,11 +27,21 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const body = await req.json() as { id?: number; acknowledgeAll?: boolean };
+    const body = await req.json() as {
+      id?: number;
+      acknowledgeAll?: boolean;
+      deliveredChannel?: "web" | "native" | "telegram";
+      telegramMessageId?: number;
+    };
 
     if (body.acknowledgeAll) {
       const db = getDb();
       db.prepare("UPDATE notification_events SET acknowledged = 1 WHERE acknowledged = 0").run();
+      return NextResponse.json({ success: true });
+    }
+
+    if (body.id && body.deliveredChannel) {
+      markNotificationDelivered(body.id, body.deliveredChannel, body.telegramMessageId);
       return NextResponse.json({ success: true });
     }
 
