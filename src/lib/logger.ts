@@ -13,6 +13,7 @@ export type LogLevel = "info" | "success" | "warn" | "error";
 
 export type LogCategory =
   | "system"
+  | "notification"
   | "quota"
   | "login"
   | "account"

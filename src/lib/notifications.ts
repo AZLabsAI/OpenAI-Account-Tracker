@@ -63,6 +63,20 @@ function bothWindowsSummary(quota: QuotaData): string {
   return `${fmtWindow("5-hour", quota.primary)} · ${fmtWindow("Weekly", quota.secondary)}`;
 }
 
+function logNotificationDelivery(
+  level: "info" | "success" | "warn",
+  message: string,
+  account: Account,
+  detail: Record<string, unknown>,
+): void {
+  const logger = level === "success" ? logSuccess : level === "warn" ? logWarn : logInfo;
+  logger("notification", message, {
+    accountId: account.id,
+    accountEmail: account.email,
+    detail,
+  });
+}
+
 // ─── Threshold detection ─────────────────────────────────────────────────────
 
 /**
@@ -196,6 +210,12 @@ export async function processTransitions(
 
       // ── Native macOS ──
       if (settings.nativeEnabled) {
+        logNotificationDelivery("info", `Delivering ${t.eventType} via native macOS`, account, {
+          channel: "native",
+          eventType: t.eventType,
+          window: t.triggerWindow,
+          notificationEventId: event.id,
+        });
         try {
           const result = sendNative({
             title: nativeTitle(t, account),
@@ -205,9 +225,34 @@ export async function processTransitions(
             group: `oat-${account.id}-${t.triggerWindow}-${t.eventType}`,
             openUrl: "http://localhost:3000",
           });
-          if (result.success) markNotificationDelivered(event.id, "native");
+          if (result.success) {
+            markNotificationDelivered(event.id, "native");
+            logNotificationDelivery("success", `Delivered ${t.eventType} via native macOS`, account, {
+              channel: "native",
+              eventType: t.eventType,
+              window: t.triggerWindow,
+              notificationEventId: event.id,
+              method: result.method,
+            });
+          } else {
+            logNotificationDelivery("warn", `Native macOS delivery failed for ${t.eventType}`, account, {
+              channel: "native",
+              eventType: t.eventType,
+              window: t.triggerWindow,
+              notificationEventId: event.id,
+              error: result.error ?? "Unknown native notification failure",
+              method: result.method,
+            });
+          }
         } catch (err) {
           logWarn("system", `Native notification failed: ${err instanceof Error ? err.message : String(err)}`);
+          logNotificationDelivery("warn", `Native macOS delivery threw for ${t.eventType}`, account, {
+            channel: "native",
+            eventType: t.eventType,
+            window: t.triggerWindow,
+            notificationEventId: event.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
         }
       }
 
@@ -215,17 +260,62 @@ export async function processTransitions(
       if (settings.telegramEnabled) {
         const creds = getTelegramCredentials();
         if (creds) {
+          logNotificationDelivery("info", `Delivering ${t.eventType} via Telegram`, account, {
+            channel: "telegram",
+            eventType: t.eventType,
+            window: t.triggerWindow,
+            notificationEventId: event.id,
+          });
           try {
             const telegramMsg = formatTelegramMessage(t, account);
             const result = await sendTelegram(creds.botToken, creds.chatId, telegramMsg);
-            if (result.success) markNotificationDelivered(event.id, "telegram", result.messageId);
+            if (result.success) {
+              markNotificationDelivered(event.id, "telegram", result.messageId);
+              logNotificationDelivery("success", `Delivered ${t.eventType} via Telegram`, account, {
+                channel: "telegram",
+                eventType: t.eventType,
+                window: t.triggerWindow,
+                notificationEventId: event.id,
+                messageId: result.messageId ?? null,
+              });
+            } else {
+              logNotificationDelivery("warn", `Telegram delivery failed for ${t.eventType}`, account, {
+                channel: "telegram",
+                eventType: t.eventType,
+                window: t.triggerWindow,
+                notificationEventId: event.id,
+                error: result.error ?? "Telegram API returned failure",
+              });
+            }
           } catch (err) {
             logWarn("system", `Telegram notification failed: ${err instanceof Error ? err.message : String(err)}`);
+            logNotificationDelivery("warn", `Telegram delivery threw for ${t.eventType}`, account, {
+              channel: "telegram",
+              eventType: t.eventType,
+              window: t.triggerWindow,
+              notificationEventId: event.id,
+              error: err instanceof Error ? err.message : String(err),
+            });
           }
+        } else {
+          logNotificationDelivery("warn", `Telegram delivery skipped for ${t.eventType} — credentials missing`, account, {
+            channel: "telegram",
+            eventType: t.eventType,
+            window: t.triggerWindow,
+            notificationEventId: event.id,
+            reason: "telegram_credentials_missing",
+          });
         }
       }
     } else {
       logInfo("system", `Quiet hours active — notification recorded but not delivered: ${t.message}`);
+      logNotificationDelivery("info", `Delivery skipped during quiet hours for ${t.eventType}`, account, {
+        channel: "all",
+        eventType: t.eventType,
+        window: t.triggerWindow,
+        notificationEventId: event.id,
+        reason: "quiet_hours",
+      });
     }
 
     events.push(event);
@@ -350,14 +440,35 @@ export async function notifyAccountSwitch(
 
   if (!isQuietHours()) {
     if (settings.nativeEnabled) {
-      sendNative({
+      logNotificationDelivery("info", "Delivering account_switch via native macOS", newAccount, {
+        channel: "native",
+        eventType: "account_switch",
+        notificationEventId: event.id,
+      });
+      const result = sendNative({
         title: "🔄 Account Switched",
         subtitle: newAccount.email,
         message: `Now using: ${newAccount.name}\n${previousName ? `Was: ${previousName}` : ""}`,
         group: "oat-account-switch",
         openUrl: "http://localhost:3000",
       });
-      markNotificationDelivered(event.id, "native");
+      if (result.success) {
+        markNotificationDelivered(event.id, "native");
+        logNotificationDelivery("success", "Delivered account_switch via native macOS", newAccount, {
+          channel: "native",
+          eventType: "account_switch",
+          notificationEventId: event.id,
+          method: result.method,
+        });
+      } else {
+        logNotificationDelivery("warn", "Native macOS delivery failed for account_switch", newAccount, {
+          channel: "native",
+          eventType: "account_switch",
+          notificationEventId: event.id,
+          error: result.error ?? "Unknown native notification failure",
+          method: result.method,
+        });
+      }
     }
 
     if (settings.telegramEnabled) {
@@ -372,10 +483,44 @@ export async function notifyAccountSwitch(
 Now: *${newAccount.name}* (${newAccount.email})${previousName ? `\nWas: ${previousName}` : ""}
 
 🕐 ${now}`;
+        logNotificationDelivery("info", "Delivering account_switch via Telegram", newAccount, {
+          channel: "telegram",
+          eventType: "account_switch",
+          notificationEventId: event.id,
+        });
         const result = await sendTelegram(creds.botToken, creds.chatId, text);
-        if (result.success) markNotificationDelivered(event.id, "telegram", result.messageId);
+        if (result.success) {
+          markNotificationDelivered(event.id, "telegram", result.messageId);
+          logNotificationDelivery("success", "Delivered account_switch via Telegram", newAccount, {
+            channel: "telegram",
+            eventType: "account_switch",
+            notificationEventId: event.id,
+            messageId: result.messageId ?? null,
+          });
+        } else {
+          logNotificationDelivery("warn", "Telegram delivery failed for account_switch", newAccount, {
+            channel: "telegram",
+            eventType: "account_switch",
+            notificationEventId: event.id,
+            error: result.error ?? "Telegram API returned failure",
+          });
+        }
+      } else {
+        logNotificationDelivery("warn", "Telegram delivery skipped for account_switch — credentials missing", newAccount, {
+          channel: "telegram",
+          eventType: "account_switch",
+          notificationEventId: event.id,
+          reason: "telegram_credentials_missing",
+        });
       }
     }
+  } else {
+    logNotificationDelivery("info", "Delivery skipped during quiet hours for account_switch", newAccount, {
+      channel: "all",
+      eventType: "account_switch",
+      notificationEventId: event.id,
+      reason: "quiet_hours",
+    });
   }
 
   return event;

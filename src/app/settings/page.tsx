@@ -6,7 +6,7 @@ import type { NotificationSettings } from "@/types";
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type LogLevel = "info" | "success" | "warn" | "error";
-type LogCategory = "system" | "quota" | "login" | "account" | "refresh-all";
+type LogCategory = "system" | "notification" | "quota" | "login" | "account" | "refresh-all";
 
 interface LogEntry {
   id: number;
@@ -46,6 +46,7 @@ const LEVEL_CONFIG: Record<LogLevel, { label: string; dot: string; bg: string; t
 
 const CATEGORY_CONFIG: Record<LogCategory, { label: string; color: string }> = {
   system:        { label: "System",      color: "text-zinc-400" },
+  notification:  { label: "Notification", color: "text-cyan-400" },
   quota:         { label: "Quota",       color: "text-sky-400"  },
   login:         { label: "Login",       color: "text-violet-400" },
   account:       { label: "Account",     color: "text-emerald-400" },
@@ -53,7 +54,7 @@ const CATEGORY_CONFIG: Record<LogCategory, { label: string; color: string }> = {
 };
 
 const ALL_LEVELS: LogLevel[] = ["info", "success", "warn", "error"];
-const ALL_CATEGORIES: LogCategory[] = ["system", "quota", "login", "account", "refresh-all"];
+const ALL_CATEGORIES: LogCategory[] = ["system", "notification", "quota", "login", "account", "refresh-all"];
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 

@@ -31,6 +31,7 @@ interface Props {
   onSetAccountType: (id: string, type: AccountType | undefined) => void;
   onQuotaUpdated: (id: string, quotaData: QuotaData, codexHomePath?: string) => void;
   onUpdateSettings: (id: string, patch: Partial<Account>) => void;
+  onNotifications: (notifications: Array<{ id: number; eventType: string; message: string }>) => void;
 }
 
 type LoginState = "idle" | "waiting" | "success" | "error";
@@ -49,6 +50,7 @@ export function AccountCard({
   onSetAccountType,
   onQuotaUpdated,
   onUpdateSettings,
+  onNotifications,
 }: Props) {
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -88,10 +90,17 @@ export function AccountCard({
         body: JSON.stringify({}),
         signal: AbortSignal.timeout(6 * 60 * 1000),
       });
-      const data = await res.json();
+      const data = await res.json() as {
+        success?: boolean;
+        error?: string;
+        codexHomePath?: string;
+        quotaData?: QuotaData;
+        notifications?: Array<{ id: number; eventType: string; message: string }>;
+      };
       if (data.success) {
         setLoginState("success");
         if (data.quotaData) onQuotaUpdated(account.id, data.quotaData, data.codexHomePath);
+        if (data.notifications?.length) onNotifications(data.notifications);
         setTimeout(() => setLoginState("idle"), 3000);
       } else {
         setLoginState("error");
@@ -101,7 +110,7 @@ export function AccountCard({
       setLoginState("error");
       setLoginError(err instanceof Error ? err.message : "Sign in failed");
     }
-  }, [account.id, onQuotaUpdated]);
+  }, [account.id, onNotifications, onQuotaUpdated]);
 
   // ── Refresh Quota ─────────────────────────────────────────────────────────
   const handleRefreshQuota = useCallback(async () => {
@@ -112,10 +121,15 @@ export function AccountCard({
         method: "POST",
         signal: AbortSignal.timeout(30_000),
       });
-      const data = await res.json();
+      const data = await res.json() as QuotaData & {
+        error?: string;
+        notifications?: Array<{ id: number; eventType: string; message: string }>;
+      };
       if (res.ok) {
         setQuotaState("idle");
-        onQuotaUpdated(account.id, data as QuotaData);
+        const { notifications, ...quotaData } = data;
+        onQuotaUpdated(account.id, quotaData as QuotaData);
+        if (notifications?.length) onNotifications(notifications);
       } else {
         setQuotaState("error");
         setQuotaError(data.error ?? "Quota fetch failed");
@@ -124,7 +138,7 @@ export function AccountCard({
       setQuotaState("error");
       setQuotaError(err instanceof Error ? err.message : "Quota fetch failed");
     }
-  }, [account.id, onQuotaUpdated]);
+  }, [account.id, onNotifications, onQuotaUpdated]);
 
   // ── Card border style (shared by both faces) ──────────────────────────────
   // ── Avatar upload ──────────────────────────────────────────────────────────

@@ -79,10 +79,14 @@ export default function Home() {
       fetch("/api/notifications", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: event.id }),
+        body: JSON.stringify({ id: event.id, deliveredChannel: "web" }),
       }).catch(() => {});
     }
   }, []);
+
+  const handleNotificationEvents = useCallback((events: Array<{ id: number; eventType: string; message: string }>) => {
+    for (const event of events) fireWebNotification(event);
+  }, [fireWebNotification]);
 
   // ── Sync inUse flags with whichever account is logged into ~/.codex ────────
   const syncActiveCodex = useCallback(async (currentAccounts?: Account[]) => {
@@ -573,6 +577,7 @@ export default function Home() {
                       onSetAccountType={setAccountType}
                       onQuotaUpdated={updateQuota}
                       onUpdateSettings={updateSettings}
+                      onNotifications={handleNotificationEvents}
                     />
                   ))}
                   <AddAccountCard onAdded={addAccount} />
