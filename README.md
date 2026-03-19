@@ -5,7 +5,7 @@
 **A local-first dashboard for managing multiple OpenAI accounts.**\
 Track subscriptions, live usage quotas, expiration dates, and agent assignments — all from one place.
 
-[![Version](https://img.shields.io/badge/version-0.0.1--beta-blue?style=flat-square)](https://github.com/AZLabsAI/OpenAI-Account-Tracker/releases)
+[![Version](https://img.shields.io/badge/version-0.0.2--beta-blue?style=flat-square)](https://github.com/AZLabsAI/OpenAI-Account-Tracker/releases)
 [![Next.js](https://img.shields.io/badge/Next.js-15-black?style=flat-square&logo=next.js)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://typescriptlang.org)
 [![SQLite](https://img.shields.io/badge/SQLite-local--first-003B57?style=flat-square&logo=sqlite&logoColor=white)](https://sqlite.org)

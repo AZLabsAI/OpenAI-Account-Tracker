@@ -492,17 +492,27 @@ export default function Home() {
       {/* Site footer */}
       <footer className="border-t border-zinc-200 dark:border-zinc-800/40 py-4 mt-8">
         <div className="mx-auto max-w-7xl px-6 flex items-center justify-between text-[11px] text-zinc-400 dark:text-zinc-600">
-          <span>v0.0.1 Beta</span>
-          <span>
-            Created by{" "}
+          <span>v0.0.2 Beta</span>
+          <span className="flex items-center gap-3">
             <a
-              href="https://azlabs.co.za"
+              href="https://github.com/AZLabsAI/OpenAI-Account-Tracker"
               target="_blank"
               rel="noopener noreferrer"
               className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
             >
-              AZ Labs
+              GitHub
             </a>
+            <span>
+              Created by{" "}
+              <a
+                href="https://azlabs.co.za"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
+              >
+                AZ Labs
+              </a>
+            </span>
           </span>
         </div>
       </footer>
