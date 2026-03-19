@@ -6,11 +6,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSetting, setSetting } from "@/lib/db";
 import { getNotificationSettings } from "@/lib/notify-settings";
+import { parseSettingsPatch, SettingsValidationError } from "@/lib/settings-validation";
 import { validateTelegramToken } from "@/lib/notify-telegram";
-import { getNativeCapability } from "@/lib/notify-native";
 
 export async function GET() {
   const settings = getNotificationSettings();
+  const { getNativeCapability } = await import("@/lib/notify-native-capability");
   const nativeCap = getNativeCapability();
 
   return NextResponse.json({
@@ -28,11 +29,11 @@ export async function GET() {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const body = await req.json() as Record<string, unknown>;
+    const patch = parseSettingsPatch(await req.json());
 
     // ── Telegram credentials ──────────────────────────────────────────────
-    if (body.telegram_bot_token !== undefined) {
-      const token = body.telegram_bot_token as string;
+    if (patch.telegram_bot_token !== undefined) {
+      const token = patch.telegram_bot_token;
       if (token) {
         // Validate before saving
         const validation = await validateTelegramToken(token);
@@ -49,8 +50,8 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    if (body.telegram_chat_id !== undefined) {
-      setSetting("telegram_chat_id", body.telegram_chat_id as string);
+    if (patch.telegram_chat_id !== undefined) {
+      setSetting("telegram_chat_id", patch.telegram_chat_id);
     }
 
     // ── Toggle booleans ───────────────────────────────────────────────────
@@ -63,20 +64,24 @@ export async function PATCH(req: NextRequest) {
     };
 
     for (const [bodyKey, dbKey] of Object.entries(boolKeys)) {
-      if (body[bodyKey] !== undefined) {
-        setSetting(dbKey, body[bodyKey] ? "true" : "false");
+      const value = patch[bodyKey as keyof typeof patch];
+      if (value !== undefined) {
+        setSetting(dbKey, value ? "true" : "false");
       }
     }
 
     // ── String settings ───────────────────────────────────────────────────
-    if (body.quiet_hours_start !== undefined) {
-      setSetting("quiet_hours_start", body.quiet_hours_start as string);
+    if (patch.quiet_hours_start !== undefined) {
+      setSetting("quiet_hours_start", patch.quiet_hours_start);
     }
-    if (body.quiet_hours_end !== undefined) {
-      setSetting("quiet_hours_end", body.quiet_hours_end as string);
+    if (patch.quiet_hours_end !== undefined) {
+      setSetting("quiet_hours_end", patch.quiet_hours_end);
     }
-    if (body.default_thresholds !== undefined) {
-      setSetting("default_thresholds", JSON.stringify(body.default_thresholds));
+    if (patch.default_thresholds !== undefined) {
+      setSetting("default_thresholds", JSON.stringify(patch.default_thresholds));
+    }
+    if (patch.exhausted_reminder_mins !== undefined) {
+      setSetting("exhausted_reminder_mins", String(patch.exhausted_reminder_mins));
     }
 
     // Return updated settings
@@ -86,7 +91,7 @@ export async function PATCH(req: NextRequest) {
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to update settings" },
-      { status: 500 },
+      { status: err instanceof SettingsValidationError ? 400 : 500 },
     );
   }
 }

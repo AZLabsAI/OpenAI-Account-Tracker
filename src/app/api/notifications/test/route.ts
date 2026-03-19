@@ -8,8 +8,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAllAccounts } from "@/lib/db";
 import { getTelegramCredentials } from "@/lib/notify-settings";
+import { getNativeCapability } from "@/lib/notify-native-capability";
 import { sendTelegram } from "@/lib/notify-telegram";
-import { sendNative, getNativeCapability } from "@/lib/notify-native";
+import { sendNative } from "@/lib/notify-native";
 import { logInfo, logSuccess, logWarn } from "@/lib/logger";
 
 export async function POST(req: NextRequest) {

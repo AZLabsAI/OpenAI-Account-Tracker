@@ -4,72 +4,263 @@ import { accounts as seedAccounts } from "@/data/accounts";
 import type { Account } from "@/types";
 
 const DB_PATH = path.join(process.cwd(), "data.db");
+const SCHEMA_VERSION_KEY = "schema_version";
+const LATEST_SCHEMA_VERSION = 8;
 
 let _db: Database.Database | null = null;
+
+type TableColumn = {
+  name: string;
+  notnull: number;
+  pk: number;
+  dflt_value: unknown;
+  type: string;
+};
+
+type Migration = {
+  version: number;
+  up: (db: Database.Database) => void;
+};
+
+function tableExists(db: Database.Database, name: string) {
+  const row = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = @name")
+    .get({ name }) as { name: string } | undefined;
+  return Boolean(row);
+}
+
+function getTableColumns(db: Database.Database, tableName: string): TableColumn[] {
+  if (!tableExists(db, tableName)) return [];
+  return db.prepare(`PRAGMA table_info(${tableName})`).all() as TableColumn[];
+}
+
+function hasColumn(db: Database.Database, tableName: string, columnName: string) {
+  return getTableColumns(db, tableName).some((column) => column.name === columnName);
+}
+
+function createSchemaMetaTable(db: Database.Database) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS schema_meta (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  `);
+}
+
+function getSchemaVersion(db: Database.Database) {
+  createSchemaMetaTable(db);
+  const row = db
+    .prepare("SELECT value FROM schema_meta WHERE key = @key")
+    .get({ key: SCHEMA_VERSION_KEY }) as { value: string } | undefined;
+
+  if (!row) return 0;
+  const version = Number.parseInt(row.value, 10);
+  return Number.isFinite(version) ? version : 0;
+}
+
+function setSchemaVersion(db: Database.Database, version: number) {
+  createSchemaMetaTable(db);
+  db.prepare(`
+    INSERT INTO schema_meta (key, value)
+    VALUES (@key, @value)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run({ key: SCHEMA_VERSION_KEY, value: String(version) });
+}
+
+function createFinalAccountsTable(db: Database.Database) {
+  db.exec(`
+    CREATE TABLE accounts (
+      id                  TEXT PRIMARY KEY,
+      name                TEXT NOT NULL,
+      email               TEXT NOT NULL,
+      subscription        TEXT NOT NULL,
+      expirationDate      TEXT,
+      usageLimits         TEXT NOT NULL DEFAULT '[]',
+      starred             INTEGER NOT NULL DEFAULT 0,
+      inUse               INTEGER NOT NULL DEFAULT 0,
+      pinned              INTEGER NOT NULL DEFAULT 0,
+      pinOrder            INTEGER NOT NULL DEFAULT 0,
+      notes               TEXT,
+      lastChecked         TEXT,
+      avatarUrl           TEXT,
+      accountType         TEXT,
+      codexAssignedTo     TEXT NOT NULL DEFAULT '[]',
+      chatgptAssignedTo   TEXT NOT NULL DEFAULT '[]',
+      codexHomePath       TEXT,
+      quotaData           TEXT,
+      refreshIntervalMins INTEGER
+    )
+  `);
+}
+
+const migrations: Migration[] = [
+  {
+    version: 1,
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS accounts (
+          id                TEXT PRIMARY KEY,
+          name              TEXT NOT NULL,
+          email             TEXT NOT NULL,
+          subscription      TEXT NOT NULL,
+          expirationDate    TEXT NOT NULL,
+          usageLimits       TEXT NOT NULL DEFAULT '[]',
+          starred           INTEGER NOT NULL DEFAULT 0,
+          inUse             INTEGER NOT NULL DEFAULT 0,
+          notes             TEXT,
+          lastChecked       TEXT,
+          avatarUrl         TEXT,
+          accountType       TEXT,
+          codexAssignedTo   TEXT NOT NULL DEFAULT '[]',
+          chatgptAssignedTo TEXT NOT NULL DEFAULT '[]'
+        )
+      `);
+    },
+  },
+  {
+    version: 2,
+    up(db) {
+      if (!hasColumn(db, "accounts", "pinned")) {
+        db.exec("ALTER TABLE accounts ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
+      }
+      if (!hasColumn(db, "accounts", "pinOrder")) {
+        db.exec("ALTER TABLE accounts ADD COLUMN pinOrder INTEGER NOT NULL DEFAULT 0");
+      }
+    },
+  },
+  {
+    version: 3,
+    up(db) {
+      if (!hasColumn(db, "accounts", "codexHomePath")) {
+        db.exec("ALTER TABLE accounts ADD COLUMN codexHomePath TEXT");
+      }
+    },
+  },
+  {
+    version: 4,
+    up(db) {
+      if (!hasColumn(db, "accounts", "quotaData")) {
+        db.exec("ALTER TABLE accounts ADD COLUMN quotaData TEXT");
+      }
+    },
+  },
+  {
+    version: 5,
+    up(db) {
+      if (!hasColumn(db, "accounts", "refreshIntervalMins")) {
+        db.exec("ALTER TABLE accounts ADD COLUMN refreshIntervalMins INTEGER");
+      }
+    },
+  },
+  {
+    version: 6,
+    up(db) {
+      const expirationDateColumn = getTableColumns(db, "accounts").find((column) => column.name === "expirationDate");
+      if (!expirationDateColumn?.notnull) return;
+
+      db.exec("ALTER TABLE accounts RENAME TO accounts_old");
+      createFinalAccountsTable(db);
+      db.exec(`
+        INSERT INTO accounts (
+          id,
+          name,
+          email,
+          subscription,
+          expirationDate,
+          usageLimits,
+          starred,
+          inUse,
+          pinned,
+          pinOrder,
+          notes,
+          lastChecked,
+          avatarUrl,
+          accountType,
+          codexAssignedTo,
+          chatgptAssignedTo,
+          codexHomePath,
+          quotaData,
+          refreshIntervalMins
+        )
+        SELECT
+          id,
+          name,
+          email,
+          subscription,
+          expirationDate,
+          usageLimits,
+          starred,
+          inUse,
+          pinned,
+          pinOrder,
+          notes,
+          lastChecked,
+          avatarUrl,
+          accountType,
+          codexAssignedTo,
+          chatgptAssignedTo,
+          codexHomePath,
+          quotaData,
+          refreshIntervalMins
+        FROM accounts_old
+      `);
+      db.exec("DROP TABLE accounts_old");
+    },
+  },
+  {
+    version: 7,
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS settings (
+          key   TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        )
+      `);
+    },
+  },
+  {
+    version: 8,
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS notification_events (
+          id                INTEGER PRIMARY KEY AUTOINCREMENT,
+          accountId         TEXT NOT NULL,
+          eventType         TEXT NOT NULL,
+          window            TEXT,
+          usedPercent       REAL,
+          message           TEXT NOT NULL,
+          createdAt         TEXT NOT NULL,
+          acknowledged      INTEGER NOT NULL DEFAULT 0,
+          deliveredWeb      INTEGER NOT NULL DEFAULT 0,
+          deliveredNative   INTEGER NOT NULL DEFAULT 0,
+          deliveredTelegram INTEGER NOT NULL DEFAULT 0,
+          telegramMessageId INTEGER
+        )
+      `);
+    },
+  },
+];
+
+function migrateSchema(db: Database.Database) {
+  let currentVersion = getSchemaVersion(db);
+  if (currentVersion >= LATEST_SCHEMA_VERSION) return;
+
+  for (const migration of migrations) {
+    if (migration.version <= currentVersion) continue;
+    db.transaction(() => {
+      migration.up(db);
+      setSchemaVersion(db, migration.version);
+    })();
+    currentVersion = migration.version;
+  }
+}
 
 export function getDb(): Database.Database {
   if (_db) return _db;
 
   _db = new Database(DB_PATH);
   _db.pragma("journal_mode = WAL");
-
-  // Create table if it doesn't exist
-  _db.exec(`
-    CREATE TABLE IF NOT EXISTS accounts (
-      id                TEXT PRIMARY KEY,
-      name              TEXT NOT NULL,
-      email             TEXT NOT NULL,
-      subscription      TEXT NOT NULL,
-      expirationDate    TEXT NOT NULL,
-      usageLimits       TEXT NOT NULL DEFAULT '[]',
-      starred           INTEGER NOT NULL DEFAULT 0,
-      inUse             INTEGER NOT NULL DEFAULT 0,
-      pinned            INTEGER NOT NULL DEFAULT 0,
-      pinOrder          INTEGER NOT NULL DEFAULT 0,
-      notes             TEXT,
-      lastChecked       TEXT,
-      avatarUrl         TEXT,
-      accountType       TEXT,
-      codexAssignedTo   TEXT NOT NULL DEFAULT '[]',
-      chatgptAssignedTo TEXT NOT NULL DEFAULT '[]',
-      codexHomePath     TEXT,
-      quotaData         TEXT
-    )
-  `);
-
-  // Migrate older DBs that are missing newer columns
-  const cols = (_db.prepare("PRAGMA table_info(accounts)").all() as { name: string }[]).map((c) => c.name);
-  if (!cols.includes("pinned"))        _db.exec("ALTER TABLE accounts ADD COLUMN pinned        INTEGER NOT NULL DEFAULT 0");
-  if (!cols.includes("pinOrder"))      _db.exec("ALTER TABLE accounts ADD COLUMN pinOrder      INTEGER NOT NULL DEFAULT 0");
-  if (!cols.includes("codexHomePath")) _db.exec("ALTER TABLE accounts ADD COLUMN codexHomePath TEXT");
-  if (!cols.includes("quotaData"))     _db.exec("ALTER TABLE accounts ADD COLUMN quotaData     TEXT");
-  if (!cols.includes("refreshIntervalMins")) _db.exec("ALTER TABLE accounts ADD COLUMN refreshIntervalMins INTEGER");
-
-  // ── Settings table ────────────────────────────────────────────────────────
-  _db.exec(`
-    CREATE TABLE IF NOT EXISTS settings (
-      key   TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    )
-  `);
-
-  // ── Notification events table ─────────────────────────────────────────────
-  _db.exec(`
-    CREATE TABLE IF NOT EXISTS notification_events (
-      id                INTEGER PRIMARY KEY AUTOINCREMENT,
-      accountId         TEXT NOT NULL,
-      eventType         TEXT NOT NULL,
-      window            TEXT,
-      usedPercent       REAL,
-      message           TEXT NOT NULL,
-      createdAt         TEXT NOT NULL,
-      acknowledged      INTEGER NOT NULL DEFAULT 0,
-      deliveredWeb      INTEGER NOT NULL DEFAULT 0,
-      deliveredNative   INTEGER NOT NULL DEFAULT 0,
-      deliveredTelegram INTEGER NOT NULL DEFAULT 0,
-      telegramMessageId INTEGER
-    )
-  `);
+  migrateSchema(_db);
 
   // Seed from accounts.ts if the table is empty
   const count = (_db.prepare("SELECT COUNT(*) as n FROM accounts").get() as { n: number }).n;
@@ -80,13 +271,13 @@ export function getDb(): Database.Database {
         usageLimits, starred, inUse, pinned, pinOrder,
         notes, lastChecked, avatarUrl, accountType,
         codexAssignedTo, chatgptAssignedTo,
-        codexHomePath, quotaData
+        codexHomePath, quotaData, refreshIntervalMins
       ) VALUES (
         @id, @name, @email, @subscription, @expirationDate,
         @usageLimits, @starred, @inUse, @pinned, @pinOrder,
         @notes, @lastChecked, @avatarUrl, @accountType,
         @codexAssignedTo, @chatgptAssignedTo,
-        @codexHomePath, @quotaData
+        @codexHomePath, @quotaData, @refreshIntervalMins
       )
     `);
     const insertMany = _db.transaction((accs: Account[]) => {
@@ -96,7 +287,7 @@ export function getDb(): Database.Database {
           name:              a.name,
           email:             a.email,
           subscription:      a.subscription,
-          expirationDate:    a.expirationDate,
+          expirationDate:    a.expirationDate ?? null,
           usageLimits:       JSON.stringify(a.usageLimits ?? []),
           starred:           a.starred   ? 1 : 0,
           inUse:             a.inUse     ? 1 : 0,
@@ -110,6 +301,7 @@ export function getDb(): Database.Database {
           chatgptAssignedTo: JSON.stringify(a.chatgptAssignedTo ?? []),
           codexHomePath:     a.codexHomePath ?? null,
           quotaData:         a.quotaData ? JSON.stringify(a.quotaData) : null,
+          refreshIntervalMins: a.refreshIntervalMins ?? null,
         });
       }
     });
@@ -126,7 +318,7 @@ function rowToAccount(row: Record<string, unknown>): Account {
     name:              row.name as string,
     email:             row.email as string,
     subscription:      row.subscription as Account["subscription"],
-    expirationDate:    row.expirationDate as string,
+    expirationDate:    (row.expirationDate as string | null) ?? undefined,
     usageLimits:       JSON.parse(row.usageLimits as string),
     starred:           Boolean(row.starred),
     inUse:             Boolean(row.inUse),
@@ -201,7 +393,7 @@ export function createAccount(data: {
   name: string;
   email: string;
   subscription: string;
-  expirationDate: string;
+  expirationDate?: string | null;
   accountType?: string;
 }): Account {
   const db = getDb();
@@ -221,7 +413,7 @@ export function createAccount(data: {
     name:           data.name,
     email:          data.email,
     subscription:   data.subscription,
-    expirationDate: data.expirationDate,
+    expirationDate: data.expirationDate ?? null,
     accountType:    data.accountType ?? null,
   });
   const row = db.prepare("SELECT * FROM accounts WHERE id = @id").get({ id }) as Record<string, unknown>;
@@ -326,10 +518,18 @@ export function getUnacknowledgedCount(): number {
  * "Unresolved" means: no quota_reset event exists after the last exhausted/critical/warning event.
  */
 export function hasUnresolvedEvent(accountId: string, eventType: NotificationEventType, window: string | null): boolean {
-  const db = getDb();
-
   // For reset events, we never dedup — always fire
   if (eventType === "quota_reset") return false;
+
+  return getLatestUnresolvedEvent(accountId, eventType, window) !== null;
+}
+
+export function getLatestUnresolvedEvent(
+  accountId: string,
+  eventType: NotificationEventType,
+  window: string | null,
+): { id: number; createdAt: string } | null {
+  const db = getDb();
 
   // Find the most recent event of this exact type for this account+window
   const lastEvent = db.prepare(`
@@ -338,7 +538,7 @@ export function hasUnresolvedEvent(accountId: string, eventType: NotificationEve
     ORDER BY id DESC LIMIT 1
   `).get({ accountId, eventType, window: window ?? null }) as { id: number; createdAt: string } | undefined;
 
-  if (!lastEvent) return false;
+  if (!lastEvent) return null;
 
   // Check if there's been a reset since that event
   const resetAfter = db.prepare(`
@@ -348,10 +548,10 @@ export function hasUnresolvedEvent(accountId: string, eventType: NotificationEve
   `).get({ accountId, window: window ?? null, afterId: lastEvent.id }) as { id: number } | undefined;
 
   // If there's been a reset, the old event is resolved
-  if (resetAfter) return false;
+  if (resetAfter) return null;
 
-  // No reset — event is still unresolved, don't fire again
-  return true;
+  // No reset — event is still unresolved
+  return lastEvent;
 }
 
 function rowToNotificationEvent(row: Record<string, unknown>): NotificationEvent {

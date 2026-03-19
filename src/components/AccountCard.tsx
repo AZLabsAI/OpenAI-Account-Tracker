@@ -1,8 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useCallback, useRef } from "react";
-import { Account, CODEX_AGENTS, CHATGPT_AGENTS, CodexAgent, ChatGPTAgent, ACCOUNT_TYPES, AccountType, QuotaData } from "@/types";
-import { getAccountStatus, formatDate, daysUntilExpiration } from "@/data/accounts";
+import { Account, CODEX_AGENTS, CHATGPT_AGENTS, CodexAgent, ChatGPTAgent, ACCOUNT_TYPES, AccountType } from "@/types";
+import { formatDate, daysUntilExpiration } from "@/data/accounts";
+import { getAccountStatus, getExpiryBorderUrgency } from "@/lib/account-health";
+import type { LoginState, QuotaState } from "@/hooks/useAccountRefreshController";
 import { StatusBadge } from "./StatusBadge";
 import { UsageBar, QuotaBar } from "./UsageBar";
 
@@ -29,13 +32,14 @@ interface Props {
   onAssignCodex: (id: string, agents: CodexAgent[]) => void;
   onAssignChatGPT: (id: string, agents: ChatGPTAgent[]) => void;
   onSetAccountType: (id: string, type: AccountType | undefined) => void;
-  onQuotaUpdated: (id: string, quotaData: QuotaData, codexHomePath?: string) => void;
+  onSignIn: (id: string) => void;
+  onRefreshQuota: (id: string) => void;
+  loginState: LoginState;
+  loginError: string | null;
+  quotaState: QuotaState;
+  quotaError: string | null;
   onUpdateSettings: (id: string, patch: Partial<Account>) => void;
-  onNotifications: (notifications: Array<{ id: number; eventType: string; message: string }>) => void;
 }
-
-type LoginState = "idle" | "waiting" | "success" | "error";
-type QuotaState = "idle" | "loading" | "error";
 
 // ─── Main component ─────────────────────────────────────────────────────────
 
@@ -48,23 +52,23 @@ export function AccountCard({
   onAssignCodex,
   onAssignChatGPT,
   onSetAccountType,
-  onQuotaUpdated,
+  onSignIn,
+  onRefreshQuota,
+  loginState,
+  loginError,
+  quotaState,
+  quotaError,
   onUpdateSettings,
-  onNotifications,
 }: Props) {
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [flipped, setFlipped] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
-  const [loginState, setLoginState] = useState<LoginState>("idle");
-  const [loginError, setLoginError] = useState<string | null>(null);
-
-  const [quotaState, setQuotaState] = useState<QuotaState>("idle");
-  const [quotaError, setQuotaError] = useState<string | null>(null);
-
   const status = getAccountStatus(account);
   const daysLeft = daysUntilExpiration(account.expirationDate);
+  const expiryLabel = formatDate(account.expirationDate);
+  const daysRemainingLabel = daysLeft === null ? "—" : `${Math.max(daysLeft, 0)}`;
   const initials = account.name
     .split(" ")
     .map((w) => w[0])
@@ -78,67 +82,6 @@ export function AccountCard({
   const hasCodexHome = Boolean(account.codexHomePath);
 
   const dropdownArrow = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2371717a' d='M3 4.5L6 8l3-3.5H3z'/%3E%3C/svg%3E")`;
-
-  // ── Sign In (OAuth login) ──────────────────────────────────────────────────
-  const handleSignIn = useCallback(async () => {
-    setLoginState("waiting");
-    setLoginError(null);
-    try {
-      const res = await fetch(`/api/accounts/${account.id}/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-        signal: AbortSignal.timeout(6 * 60 * 1000),
-      });
-      const data = await res.json() as {
-        success?: boolean;
-        error?: string;
-        codexHomePath?: string;
-        quotaData?: QuotaData;
-        notifications?: Array<{ id: number; eventType: string; message: string }>;
-      };
-      if (data.success) {
-        setLoginState("success");
-        if (data.quotaData) onQuotaUpdated(account.id, data.quotaData, data.codexHomePath);
-        if (data.notifications?.length) onNotifications(data.notifications);
-        setTimeout(() => setLoginState("idle"), 3000);
-      } else {
-        setLoginState("error");
-        setLoginError(data.error ?? "Sign in failed");
-      }
-    } catch (err) {
-      setLoginState("error");
-      setLoginError(err instanceof Error ? err.message : "Sign in failed");
-    }
-  }, [account.id, onNotifications, onQuotaUpdated]);
-
-  // ── Refresh Quota ─────────────────────────────────────────────────────────
-  const handleRefreshQuota = useCallback(async () => {
-    setQuotaState("loading");
-    setQuotaError(null);
-    try {
-      const res = await fetch(`/api/accounts/${account.id}/quota`, {
-        method: "POST",
-        signal: AbortSignal.timeout(30_000),
-      });
-      const data = await res.json() as QuotaData & {
-        error?: string;
-        notifications?: Array<{ id: number; eventType: string; message: string }>;
-      };
-      if (res.ok) {
-        setQuotaState("idle");
-        const { notifications, ...quotaData } = data;
-        onQuotaUpdated(account.id, quotaData as QuotaData);
-        if (notifications?.length) onNotifications(notifications);
-      } else {
-        setQuotaState("error");
-        setQuotaError(data.error ?? "Quota fetch failed");
-      }
-    } catch (err) {
-      setQuotaState("error");
-      setQuotaError(err instanceof Error ? err.message : "Quota fetch failed");
-    }
-  }, [account.id, onNotifications, onQuotaUpdated]);
 
   // ── Card border style (shared by both faces) ──────────────────────────────
   // ── Avatar upload ──────────────────────────────────────────────────────────
@@ -159,13 +102,21 @@ export function AccountCard({
     e.target.value = "";
   }, [account.id, onUpdateSettings]);
 
-  const borderClass = isPinned
+  const baseBorderClass = isPinned
     ? "border-violet-300 hover:border-violet-400 dark:border-violet-500/30 dark:hover:border-violet-500/50"
     : isStarred
       ? "border-amber-300 hover:border-amber-400 dark:border-amber-500/25 dark:hover:border-amber-500/40"
       : isInUse
         ? "border-blue-300 hover:border-blue-400 dark:border-blue-500/25 dark:hover:border-blue-500/40"
         : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700";
+
+  const urgencyBorderClass = getExpiryBorderUrgency(account) === "critical"
+    ? "border-red-400 hover:border-red-500 dark:border-red-500/40 dark:hover:border-red-500/60"
+    : getExpiryBorderUrgency(account) === "warning"
+      ? "border-orange-400 hover:border-orange-500 dark:border-orange-500/40 dark:hover:border-orange-500/60"
+      : null;
+
+  const borderClass = urgencyBorderClass ?? baseBorderClass;
 
   // ── Accent strip ──────────────────────────────────────────────────────────
   const accentStrip = isPinned
@@ -247,7 +198,14 @@ export function AccountCard({
                   title="Click to change avatar"
                 >
                   {account.avatarUrl ? (
-                    <img src={account.avatarUrl} alt={account.name} className="h-full w-full object-cover" />
+                    <Image
+                      src={account.avatarUrl}
+                      alt={account.name}
+                      width={44}
+                      height={44}
+                      unoptimized
+                      className="h-full w-full object-cover"
+                    />
                   ) : (
                     initials
                   )}
@@ -350,11 +308,11 @@ export function AccountCard({
               </div>
               <div>
                 <span className="text-zinc-500 dark:text-zinc-500 text-xs">Expires</span>
-                <p className="font-medium text-zinc-800 dark:text-zinc-200 text-[13px]">{formatDate(account.expirationDate)}</p>
+                <p className="font-medium text-zinc-800 dark:text-zinc-200 text-[13px]">{expiryLabel}</p>
               </div>
               <div>
                 <span className="text-zinc-500 dark:text-zinc-500 text-xs">Days Remaining</span>
-                <p className="font-mono font-semibold text-zinc-800 dark:text-zinc-200 text-[13px]">{daysLeft > 0 ? daysLeft : 0}</p>
+                <p className="font-mono font-semibold text-zinc-800 dark:text-zinc-200 text-[13px]">{daysRemainingLabel}</p>
               </div>
               <div className="space-y-2.5">
                 {/* Codex O-Auth – multi */}
@@ -489,15 +447,14 @@ export function AccountCard({
               <div className="flex items-center gap-2">
                 <SignInButton
                   state={loginState}
-                  error={loginError}
                   hasCodexHome={hasCodexHome}
-                  onClick={handleSignIn}
+                  onClick={() => onSignIn(account.id)}
                 />
                 {hasCodexHome && (
                   <RefreshQuotaButton
                     state={quotaState}
                     fetchedAt={account.quotaData?.fetchedAt}
-                    onClick={handleRefreshQuota}
+                    onClick={() => onRefreshQuota(account.id)}
                   />
                 )}
               </div>
@@ -560,7 +517,14 @@ export function AccountCard({
                   }`}
                 >
                   {account.avatarUrl ? (
-                    <img src={account.avatarUrl} alt={account.name} className="h-full w-full object-cover" />
+                    <Image
+                      src={account.avatarUrl}
+                      alt={account.name}
+                      width={32}
+                      height={32}
+                      unoptimized
+                      className="h-full w-full object-cover"
+                    />
                   ) : (
                     initials
                   )}
@@ -739,12 +703,10 @@ function timeAgo(isoStr: string): string {
 
 function SignInButton({
   state,
-  error,
   hasCodexHome,
   onClick,
 }: {
   state: LoginState;
-  error: string | null;
   hasCodexHome: boolean;
   onClick: () => void;
 }) {

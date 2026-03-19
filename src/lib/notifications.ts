@@ -11,6 +11,7 @@
 
 import {
   insertNotificationEvent,
+  getLatestUnresolvedEvent,
   hasUnresolvedEvent,
   markNotificationDelivered,
 } from "./db";
@@ -32,6 +33,8 @@ interface QuotaTransition {
   remainingPercent: number;
   /** Pre-built message for bell dropdown / DB */
   message: string;
+  /** Reminder transitions bypass the normal unresolved-event dedup path */
+  isReminder?: boolean;
 }
 
 function formatTimeUntil(resetsAtUnix: number | null): string {
@@ -91,6 +94,7 @@ export function detectTransitions(
   oldQuota: QuotaData | undefined | null,
   newQuota: QuotaData,
   remainingThresholds: number[] = [15, 10, 5, 0],
+  exhaustedReminderMins = 0,
 ): QuotaTransition[] {
   const transitions: QuotaTransition[] = [];
 
@@ -116,7 +120,7 @@ export function detectTransitions(
         triggerWindow: windowKey,
         quota: newQuota,
         remainingPercent: newRemaining,
-        message: `✅ ${account.name} — ${windowLabel(windowKey)} quota has reset! ${bothWindowsSummary(newQuota)}`,
+        message: `✅ ${account.name} — ${windowLabel(windowKey)} quota replenished. ${newRemaining}% remaining. ${bothWindowsSummary(newQuota)}`,
       });
       continue;
     }
@@ -159,6 +163,42 @@ export function detectTransitions(
     }
   }
 
+  if (exhaustedReminderMins > 0) {
+    transitions.push(...detectExhaustedReminderTransitions(account, newQuota, exhaustedReminderMins));
+  }
+
+  return transitions;
+}
+
+function detectExhaustedReminderTransitions(
+  account: Account,
+  newQuota: QuotaData,
+  exhaustedReminderMins: number,
+): QuotaTransition[] {
+  const transitions: QuotaTransition[] = [];
+  const cooldownMs = exhaustedReminderMins * 60_000;
+
+  for (const windowKey of ["primary", "secondary"] as const) {
+    const newWindow = newQuota[windowKey];
+    if (!newWindow || newWindow.usedPercent < 100) continue;
+
+    const unresolved = getLatestUnresolvedEvent(account.id, "quota_exhausted", windowKey);
+    if (!unresolved) continue;
+
+    const lastCreatedAt = Date.parse(unresolved.createdAt);
+    if (Number.isNaN(lastCreatedAt) || Date.now() - lastCreatedAt < cooldownMs) continue;
+
+    const resetsIn = formatTimeUntil(newWindow.resetsAt);
+    transitions.push({
+      eventType: "quota_exhausted",
+      triggerWindow: windowKey,
+      quota: newQuota,
+      remainingPercent: 0,
+      message: `🚨 ${account.name} — ${windowLabel(windowKey)} still DEPLETED! ${bothWindowsSummary(newQuota)}. Resets in ${resetsIn}.`,
+      isReminder: true,
+    });
+  }
+
   return transitions;
 }
 
@@ -181,7 +221,7 @@ export async function processTransitions(
 
   for (const t of transitions) {
     // Dedup check
-    if (hasUnresolvedEvent(account.id, t.eventType, t.triggerWindow)) {
+    if (!t.isReminder && hasUnresolvedEvent(account.id, t.eventType, t.triggerWindow)) {
       logInfo("system", `Notification deduped: ${t.eventType} for ${account.email} (${t.triggerWindow})`, {
         accountId: account.id,
         accountEmail: account.email,
@@ -331,7 +371,7 @@ function nativeTitle(t: QuotaTransition, account: Account): string {
     case "quota_exhausted": return `🚨 DEPLETED — ${account.name}`;
     case "quota_critical":  return `🔴 Critical — ${account.name}`;
     case "quota_warning":   return `⚠️ Warning — ${account.name}`;
-    case "quota_reset":     return `✅ Reset — ${account.name}`;
+    case "quota_reset":     return `✅ Replenished — ${account.name}`;
     case "account_switch":  return `🔄 Switched — ${account.name}`;
   }
 }
@@ -357,7 +397,7 @@ function nativeMessage(t: QuotaTransition): string {
   }
 
   if (t.eventType === "quota_reset") {
-    return `${windowLabel(t.triggerWindow)} quota has reset.\n${bothWindowsSummary(t.quota)}`;
+    return `${windowLabel(t.triggerWindow)} quota replenished.\n${t.remainingPercent}% remaining.\n${bothWindowsSummary(t.quota)}`;
   }
 
   // Warning / Critical — show both windows
@@ -390,6 +430,20 @@ function formatTelegramMessage(t: QuotaTransition, account: Account): string {
 ━━━━━━━━━━━━━━━━
 *${account.name}*
 ${windowLabel(t.triggerWindow)} quota is completely exhausted!
+
+📊 ${fiveHourLine}
+📊 ${weeklyLine}
+⏱ Resets in ${resetsIn}
+
+📧 ${account.email}
+🕐 ${now}`;
+  }
+
+  if (t.eventType === "quota_reset") {
+    return `✅ *QUOTA REPLENISHED — ${account.name}*
+━━━━━━━━━━━━━━━━
+${windowLabel(t.triggerWindow)} quota replenished.
+${t.remainingPercent}% remaining
 
 📊 ${fiveHourLine}
 📊 ${weeklyLine}

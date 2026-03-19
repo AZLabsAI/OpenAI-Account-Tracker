@@ -21,6 +21,12 @@ const config: Record<
     bg: "bg-emerald-400/10",
     text: "text-emerald-400",
   },
+  "waiting-refresh": {
+    label: "Waiting for Refresh",
+    dot: "bg-orange-400",
+    bg: "bg-orange-400/10 border border-orange-400/20",
+    text: "text-orange-400",
+  },
   "expiring-soon": {
     label: "Expiring Soon",
     dot: "bg-amber-400",

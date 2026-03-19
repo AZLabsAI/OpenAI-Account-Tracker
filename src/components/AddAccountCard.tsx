@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Account, ACCOUNT_TYPES, AccountType, SubscriptionTier } from "@/types";
 
 const SUBSCRIPTION_TIERS: SubscriptionTier[] = [
@@ -68,8 +68,20 @@ function AddAccountModal({
   const [accountType, setAccountType] = useState<AccountType | "">("");
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState<string | null>(null);
+  const requiresExpirationDate = subscription !== "Free";
 
-  const canSubmit = name.trim() && email.trim() && subscription && expirationDate;
+  useEffect(() => {
+    if (!requiresExpirationDate && expirationDate) {
+      setExpDate("");
+    }
+  }, [requiresExpirationDate, expirationDate]);
+
+  const canSubmit = Boolean(
+    name.trim() &&
+    email.trim() &&
+    subscription &&
+    (!requiresExpirationDate || expirationDate),
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,7 +96,7 @@ function AddAccountModal({
           name: name.trim(),
           email: email.trim(),
           subscription,
-          expirationDate,
+          expirationDate: requiresExpirationDate ? expirationDate : null,
           accountType: accountType || undefined,
         }),
       });
@@ -165,11 +177,13 @@ function AddAccountModal({
               </select>
             </Field>
 
-            <Field label="Expires" required>
+            <Field label="Expires" required={requiresExpirationDate}>
               <input
                 type="date"
                 value={expirationDate}
                 onChange={(e) => setExpDate(e.target.value)}
+                disabled={!requiresExpirationDate}
+                aria-disabled={!requiresExpirationDate}
                 className={inputCls}
               />
             </Field>

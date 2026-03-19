@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { getSortedAccounts } from "@/data/accounts";
-import { Account, CodexAgent, ChatGPTAgent, AccountType, QuotaData } from "@/types";
+import { Account, CodexAgent, ChatGPTAgent, AccountType } from "@/types";
 import { AccountCard, DashboardStats, AddAccountCard, NotificationBell } from "@/components";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useAccountRefreshController } from "@/hooks/useAccountRefreshController";
 
 async function persist(id: string, patch: Partial<Account>) {
   await fetch(`/api/accounts/${id}`, {
@@ -30,8 +31,6 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
-  const [refreshingAll, setRefreshingAll] = useState(false);
-  const [refreshProgress, setRefreshProgress] = useState<{ done: number; total: number } | null>(null);
   const [spinLevel, setSpinLevel] = useState(0);
 
   // Spin decay — level drops by 1 every 2s when not clicking
@@ -53,16 +52,16 @@ export default function Home() {
     if (typeof window === "undefined" || !("Notification" in window)) return;
     if (Notification.permission !== "granted") return;
 
-    const iconMap: Record<string, string> = {
-      quota_exhausted: "⛔",
-      quota_critical: "🔴",
-      quota_warning: "⚠️",
-      quota_reset: "✅",
-      account_switch: "🔄",
+    const titleMap: Record<string, string> = {
+      quota_exhausted: "⛔ Quota Depleted",
+      quota_critical: "🔴 Quota Critical",
+      quota_warning: "⚠️ Quota Warning",
+      quota_reset: "✅ Quota Replenished",
+      account_switch: "🔄 Account Switched",
     };
-    const emoji = iconMap[event.eventType] ?? "🔔";
+    const title = titleMap[event.eventType] ?? "🔔 OpenAI Account Tracker";
 
-    const n = new Notification(`${emoji} OpenAI Account Tracker`, {
+    const n = new Notification(title, {
       body: event.message,
       icon: "/favicon.ico",
       tag: `oat-${event.eventType}-${event.id ?? Date.now()}`,
@@ -84,9 +83,31 @@ export default function Home() {
     }
   }, []);
 
-  const handleNotificationEvents = useCallback((events: Array<{ id: number; eventType: string; message: string }>) => {
-    for (const event of events) fireWebNotification(event);
-  }, [fireWebNotification]);
+  // ── Client-side log helper ──────────────────────────────────────────────────
+  const emitLog = useCallback((level: string, category: string, message: string, extra?: Record<string, unknown>) => {
+    fetch("/api/logs/event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ level, category, message, ...extra }),
+    }).catch(() => {});
+  }, []);
+
+  const {
+    loginStates,
+    loginErrors,
+    quotaStates,
+    quotaErrors,
+    refreshingAll,
+    refreshProgress,
+    refreshAll,
+    signInAccount,
+    refreshAccount,
+  } = useAccountRefreshController({
+    accounts,
+    setAccounts,
+    emitLog,
+    fireWebNotification,
+  });
 
   // ── Sync inUse flags with whichever account is logged into ~/.codex ────────
   const syncActiveCodex = useCallback(async (currentAccounts?: Account[]) => {
@@ -161,74 +182,6 @@ export default function Home() {
 
     return result;
   }, [sorted, filter, search]);
-
-  // ── Client-side log helper ──────────────────────────────────────────────────
-  const emitLog = useCallback((level: string, category: string, message: string, extra?: Record<string, unknown>) => {
-    fetch("/api/logs/event", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ level, category, message, ...extra }),
-    }).catch(() => {});
-  }, []);
-
-  // ── Refresh All ────────────────────────────────────────────────────────────
-  const refreshAll = useCallback(async () => {
-    const eligible = accounts.filter((a) => a.codexHomePath);
-    if (eligible.length === 0) return;
-
-    setRefreshingAll(true);
-    setRefreshProgress({ done: 0, total: eligible.length });
-
-    emitLog("info", "refresh-all", `Refresh All started — ${eligible.length} account(s)`, {
-      detail: { accountIds: eligible.map((a) => a.id), emails: eligible.map((a) => a.email) },
-    });
-
-    const t0 = Date.now();
-    let successCount = 0;
-    let failCount = 0;
-
-    for (let i = 0; i < eligible.length; i++) {
-      const acc = eligible[i];
-      try {
-        const res = await fetch(`/api/accounts/${acc.id}/quota`, {
-          method: "POST",
-          signal: AbortSignal.timeout(30_000),
-        });
-        if (res.ok) {
-          const data = await res.json() as QuotaData & { notifications?: Array<{ id: number; eventType: string; message: string }> };
-          const { notifications: newNotifs, ...quotaData } = data;
-          setAccounts((prev) =>
-            prev.map((a) =>
-              a.id === acc.id
-                ? { ...a, quotaData, lastChecked: new Date().toISOString() }
-                : a,
-            ),
-          );
-          // Fire Web Notifications
-          if (newNotifs) {
-            for (const n of newNotifs) fireWebNotification(n);
-          }
-          successCount++;
-        } else {
-          failCount++;
-        }
-      } catch {
-        failCount++;
-      }
-      setRefreshProgress({ done: i + 1, total: eligible.length });
-    }
-
-    const durationMs = Date.now() - t0;
-
-    if (failCount === 0) {
-      emitLog("success", "refresh-all", `Refresh All completed — ${successCount}/${eligible.length} succeeded in ${(durationMs / 1000).toFixed(1)}s`, { durationMs });
-    } else {
-      emitLog("warn", "refresh-all", `Refresh All finished — ${successCount} succeeded, ${failCount} failed out of ${eligible.length} in ${(durationMs / 1000).toFixed(1)}s`, { durationMs });
-    }
-
-    setRefreshingAll(false);
-    setRefreshProgress(null);
-  }, [accounts, emitLog, fireWebNotification]);
 
   // ── Account mutations ─────────────────────────────────────────────────────
 
@@ -314,20 +267,6 @@ export default function Home() {
     );
   }, []);
 
-  const updateQuota = useCallback((id: string, quotaData: QuotaData, codexHomePath?: string) => {
-    setAccounts((prev) =>
-      prev.map((a) => {
-        if (a.id !== id) return a;
-        return {
-          ...a,
-          quotaData,
-          lastChecked: new Date().toISOString(),
-          ...(codexHomePath ? { codexHomePath } : {}),
-        };
-      }),
-    );
-  }, []);
-
   const addAccount = useCallback((account: Account) => {
     setAccounts((prev) => [...prev, account]);
   }, []);
@@ -341,52 +280,6 @@ export default function Home() {
       }),
     );
   }, []);
-
-  // ── Auto-refresh timer ────────────────────────────────────────────────────
-  // Runs a single 30s interval that checks all accounts with a refreshIntervalMins
-  // and fires a quota refresh when enough time has elapsed since their last fetch.
-  const autoRefreshingRef = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = Date.now();
-      for (const acc of accounts) {
-        if (!acc.refreshIntervalMins || !acc.codexHomePath) continue;
-        if (autoRefreshingRef.current.has(acc.id)) continue; // already in-flight
-
-        const fetchedAt = acc.quotaData?.fetchedAt ? new Date(acc.quotaData.fetchedAt).getTime() : 0;
-        const elapsed = (now - fetchedAt) / 60_000; // minutes
-
-        if (elapsed >= acc.refreshIntervalMins) {
-          autoRefreshingRef.current.add(acc.id);
-          fetch(`/api/accounts/${acc.id}/quota`, { method: "POST", signal: AbortSignal.timeout(30_000) })
-            .then(async (res) => {
-              if (res.ok) {
-                const data = await res.json() as QuotaData & { notifications?: Array<{ id: number; eventType: string; message: string }> };
-                const { notifications: newNotifs, ...quotaData } = data;
-                setAccounts((prev) =>
-                  prev.map((a) =>
-                    a.id === acc.id
-                      ? { ...a, quotaData, lastChecked: new Date().toISOString() }
-                      : a,
-                  ),
-                );
-                // Fire Web Notifications from auto-refresh
-                if (newNotifs) {
-                  for (const n of newNotifs) fireWebNotification(n);
-                }
-              }
-            })
-            .catch(() => {})
-            .finally(() => {
-              autoRefreshingRef.current.delete(acc.id);
-            });
-        }
-      }
-    }, 30_000); // check every 30 seconds
-
-    return () => clearInterval(interval);
-  }, [accounts, fireWebNotification]);
 
   // Count signed-in accounts for the Refresh All button
   const signedInCount = accounts.filter((a) => a.codexHomePath).length;
@@ -575,9 +468,13 @@ export default function Home() {
                       onAssignCodex={assignCodexAgent}
                       onAssignChatGPT={assignChatGPTAgent}
                       onSetAccountType={setAccountType}
-                      onQuotaUpdated={updateQuota}
+                      onSignIn={signInAccount}
+                      onRefreshQuota={refreshAccount}
+                      loginState={loginStates[account.id] ?? "idle"}
+                      loginError={loginErrors[account.id] ?? null}
+                      quotaState={quotaStates[account.id] ?? "idle"}
+                      quotaError={quotaErrors[account.id] ?? null}
                       onUpdateSettings={updateSettings}
-                      onNotifications={handleNotificationEvents}
                     />
                   ))}
                   <AddAccountCard onAdded={addAccount} />

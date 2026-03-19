@@ -15,7 +15,12 @@ export type SubscriptionTier =
   | "API Pay-As-You-Go"
   | "API Scale";
 
-export type AccountStatus = "in-use" | "active" | "expiring-soon" | "expired" | "unknown";
+export type QuotaStatus = "normal" | "weekly-warning" | "waiting-refresh";
+
+export type SubscriptionStatus = "active" | "expiring" | "expired" | "unknown";
+
+/** Presentation compatibility status used by the current badge/UI layer. */
+export type AccountStatus = "in-use" | "active" | "waiting-refresh" | "expiring-soon" | "expired" | "unknown";
 
 /** Codex / agent machines an account can be assigned to. */
 export type CodexAgent =
@@ -83,8 +88,8 @@ export interface Account {
   name: string;
   email: string;
   subscription: SubscriptionTier;
-  /** ISO-8601 date string, e.g. "2026-04-06" */
-  expirationDate: string;
+  /** ISO-8601 date string, e.g. "2026-04-06". Null/undefined means no expiry. */
+  expirationDate?: string | null;
   /** Arbitrary usage buckets */
   usageLimits: UsageLimit[];
   /** Starred accounts are pinned to the top of the dashboard */
@@ -183,4 +188,5 @@ export interface NotificationSettings {
   quietHoursStart: string;
   quietHoursEnd: string;
   defaultThresholds: number[];
+  exhaustedReminderMins: number;
 }

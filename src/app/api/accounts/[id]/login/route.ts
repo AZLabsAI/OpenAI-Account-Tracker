@@ -6,13 +6,11 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getAccount, updateAccount } from "@/lib/db";
-import { loginAccount, fetchQuota } from "@/lib/codex-appserver";
+import { getAccountCodexHome } from "@/lib/codex-paths";
 import { detectTransitions, processTransitions } from "@/lib/notifications";
 import { getNotificationSettings } from "@/lib/notify-settings";
 import { logInfo, logSuccess, logWarn, logError } from "@/lib/logger";
-import { homedir } from "os";
 import { mkdirSync } from "fs";
-import path from "path";
 
 export const maxDuration = 310;
 
@@ -32,11 +30,7 @@ export async function POST(
       return NextResponse.json({ error: "Account not found" }, { status: 404 });
     }
 
-    let codexHomePath = body.codexHomePath ?? account.codexHomePath;
-
-    if (!codexHomePath) {
-      codexHomePath = path.join(homedir(), ".codex-accounts", id);
-    }
+    const codexHomePath = getAccountCodexHome(id, body.codexHomePath ?? account.codexHomePath);
 
     mkdirSync(codexHomePath, { recursive: true });
     updateAccount(id, { codexHomePath });
@@ -47,6 +41,7 @@ export async function POST(
       detail: { codexHomePath },
     });
 
+    const { loginAccount, fetchQuota } = await import("@/lib/codex-appserver");
     const result = await loginAccount(codexHomePath, 5 * 60 * 1000);
 
     if (!result.success) {
@@ -81,6 +76,7 @@ export async function POST(
         account.quotaData,
         quotaData,
         settings.defaultThresholds,
+        settings.exhaustedReminderMins,
       );
       notificationEvents = await processTransitions(account, transitions);
 

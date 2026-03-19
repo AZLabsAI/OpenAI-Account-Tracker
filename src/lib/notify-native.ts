@@ -11,21 +11,11 @@
  */
 
 import { execSync, execFileSync } from "child_process";
+import { terminalNotifierPath } from "@/lib/notify-native-capability";
 
 const DASHBOARD_URL = "http://localhost:3000";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-let _tnPath: string | null | undefined;
-function terminalNotifierPath(): string | null {
-  if (_tnPath !== undefined) return _tnPath;
-  try {
-    _tnPath = execSync("which terminal-notifier", { timeout: 3000, stdio: "pipe" }).toString().trim();
-  } catch {
-    _tnPath = null;
-  }
-  return _tnPath;
-}
 
 /** Detect the default browser's bundle ID so we can set -sender / -activate */
 let _browserBundleId: string | null | undefined;
@@ -136,7 +126,7 @@ export function sendNative(opts: {
 
       execFileSync(tnPath, args, { timeout: 5000, stdio: "pipe" });
       return { success: true, method: "terminal-notifier" };
-    } catch (err) {
+    } catch {
       // Fall through to osascript
     }
   }
@@ -150,14 +140,7 @@ export function sendNative(opts: {
 
     execSync(`osascript -e '${script}'`, { timeout: 5000, stdio: "pipe" });
     return { success: true, method: "osascript" };
-  } catch (err) {
-    return { success: false, method: "osascript", error: err instanceof Error ? err.message : String(err) };
+  } catch (error) {
+    return { success: false, method: "osascript", error: error instanceof Error ? error.message : String(error) };
   }
-}
-
-/** Check which native notification method is available */
-export function getNativeCapability(): { available: boolean; method: "terminal-notifier" | "osascript" | "none" } {
-  if (process.platform !== "darwin") return { available: false, method: "none" };
-  if (terminalNotifierPath()) return { available: true, method: "terminal-notifier" };
-  return { available: true, method: "osascript" };
 }

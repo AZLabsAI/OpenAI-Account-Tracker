@@ -16,12 +16,19 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { name, email, subscription, expirationDate, accountType } = body;
-    if (!name || !email || !subscription || !expirationDate) {
+    const requiresExpirationDate = subscription && subscription !== "Free";
+    if (!name || !email || !subscription || (requiresExpirationDate && !expirationDate)) {
       logWarn("account", "Account creation rejected — missing fields", { detail: { name, email, subscription, expirationDate } });
-      return NextResponse.json({ error: "name, email, subscription, and expirationDate are required" }, { status: 400 });
+      return NextResponse.json({ error: requiresExpirationDate ? "name, email, subscription, and expirationDate are required" : "name, email, and subscription are required" }, { status: 400 });
     }
     logInfo("account", `Creating account: ${email}`, { accountEmail: email });
-    const account = createAccount({ name, email, subscription, expirationDate, accountType });
+    const account = createAccount({
+      name,
+      email,
+      subscription,
+      expirationDate: requiresExpirationDate ? expirationDate : null,
+      accountType,
+    });
     logSuccess("account", `Account created: ${account.name} (${account.email})`, {
       accountId: account.id,
       accountEmail: account.email,

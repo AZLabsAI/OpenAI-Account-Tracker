@@ -16,12 +16,9 @@
 
 import { NextResponse } from "next/server";
 import { readFileSync, existsSync } from "fs";
-import { homedir } from "os";
-import path from "path";
 import { getAllAccounts, updateAccount } from "@/lib/db";
+import { getLiveAuthPath } from "@/lib/codex-paths";
 import { notifyAccountSwitch } from "@/lib/notifications";
-
-const LIVE_AUTH_PATH = path.join(homedir(), ".codex", "auth.json");
 
 function decodeJwtPayload(token: string): Record<string, unknown> {
   const parts = token.split(".");
@@ -33,16 +30,18 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
 
 export async function GET() {
   try {
+    const liveAuthPath = getLiveAuthPath();
+
     // 1. Check if live auth.json exists
-    if (!existsSync(LIVE_AUTH_PATH)) {
+    if (!existsSync(liveAuthPath)) {
       return NextResponse.json({
         activeEmail: null,
-        message: "No ~/.codex/auth.json found — no active Codex session",
+        message: `No auth.json found at ${liveAuthPath} — no active Codex session`,
       });
     }
 
     // 2. Read and decode the email from the id_token
-    const raw = readFileSync(LIVE_AUTH_PATH, "utf-8");
+    const raw = readFileSync(liveAuthPath, "utf-8");
     const authData = JSON.parse(raw) as {
       tokens?: { id_token?: string; account_id?: string };
     };
@@ -99,7 +98,7 @@ export async function GET() {
       switched,
       message: matched
         ? `${matched.name} (${activeEmail}) is the active Codex account`
-        : `${activeEmail} is logged in to ~/.codex but doesn't match any tracked account`,
+        : `${activeEmail} is logged in via ${liveAuthPath} but doesn't match any tracked account`,
     });
   } catch (err) {
     return NextResponse.json(

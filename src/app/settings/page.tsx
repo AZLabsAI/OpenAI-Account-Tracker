@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { NotificationSettings } from "@/types";
 
@@ -55,6 +56,13 @@ const CATEGORY_CONFIG: Record<LogCategory, { label: string; color: string }> = {
 
 const ALL_LEVELS: LogLevel[] = ["info", "success", "warn", "error"];
 const ALL_CATEGORIES: LogCategory[] = ["system", "notification", "quota", "login", "account", "refresh-all"];
+const EXHAUSTED_REMINDER_OPTIONS = [
+  { value: 0, label: "Off" },
+  { value: 60, label: "1h" },
+  { value: 240, label: "4h" },
+  { value: 480, label: "8h" },
+  { value: 1440, label: "24h" },
+] as const;
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
@@ -102,7 +110,31 @@ export default function SettingsPage() {
     setNotifLoading(false);
   }, []);
 
-  useEffect(() => { fetchNotifSettings(); }, [fetchNotifSettings]);
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const res = await fetch("/api/settings");
+        const data = await res.json() as SettingsResponse;
+        if (cancelled) return;
+        setNotifSettings(data);
+        if (data.telegramChatId && !data.telegramEnvChatId) {
+          setTelegramChatId(data.telegramChatId);
+        }
+      } catch {
+        // silent
+      } finally {
+        if (!cancelled) {
+          setNotifLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // ── Fetch logs ─────────────────────────────────────────────────────────────
   const fetchLogs = useCallback(async () => {
@@ -123,11 +155,53 @@ export default function SettingsPage() {
     setLoading(false);
   }, [levelFilter, categoryFilter, search]);
 
+  const patchSettings = useCallback(async (patch: Record<string, unknown>) => {
+    const res = await fetch("/api/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error ?? "Failed to update settings");
+    }
+
+    await fetchNotifSettings();
+    return data;
+  }, [fetchNotifSettings]);
+
   // Initial + filter change
   useEffect(() => {
-    setLoading(true);
-    fetchLogs();
-  }, [fetchLogs]);
+    let cancelled = false;
+
+    void (async () => {
+      setLoading(true);
+      const params = new URLSearchParams();
+      if (levelFilter) params.set("level", levelFilter);
+      if (categoryFilter) params.set("category", categoryFilter);
+      if (search.trim()) params.set("search", search.trim());
+      params.set("limit", "500");
+
+      try {
+        const res = await fetch(`/api/logs?${params}`);
+        const data = await res.json();
+        if (cancelled) return;
+        setLogs(data.logs ?? []);
+        setStats(data.stats ?? null);
+      } catch {
+        // Silently fail
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [levelFilter, categoryFilter, search]);
 
   // Auto-refresh every 3s
   useEffect(() => {
@@ -139,12 +213,7 @@ export default function SettingsPage() {
   // ── Toggle a boolean setting ───────────────────────────────────────────────
   const toggleSetting = async (key: string, currentValue: boolean) => {
     try {
-      await fetch("/api/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [key]: !currentValue }),
-      });
-      fetchNotifSettings();
+      await patchSettings({ [key]: !currentValue });
     } catch { /* silent */ }
   };
 
@@ -157,20 +226,9 @@ export default function SettingsPage() {
       if (telegramToken.trim()) body.telegram_bot_token = telegramToken.trim();
       if (telegramChatId.trim()) body.telegram_chat_id = telegramChatId.trim();
 
-      const res = await fetch("/api/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-
-      if (res.ok) {
-        setSettingsMsg({ type: "success", text: "Telegram credentials saved successfully" });
-        setTelegramToken("");
-        fetchNotifSettings();
-      } else {
-        setSettingsMsg({ type: "error", text: data.error ?? "Failed to save" });
-      }
+      await patchSettings(body);
+      setSettingsMsg({ type: "success", text: "Telegram credentials saved successfully" });
+      setTelegramToken("");
     } catch (err) {
       setSettingsMsg({ type: "error", text: err instanceof Error ? err.message : "Failed to save" });
     }
@@ -231,7 +289,11 @@ export default function SettingsPage() {
   const toggleExpand = (id: number) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   };
@@ -242,7 +304,7 @@ export default function SettingsPage() {
       <header className="border-b border-zinc-200 dark:border-zinc-800/60 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md sticky top-0 z-50">
         <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <a
+            <Link
               href="/"
               className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
               title="Back to Dashboard"
@@ -250,7 +312,7 @@ export default function SettingsPage() {
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
                 <path fillRule="evenodd" d="M17 10a.75.75 0 0 1-.75.75H5.612l4.158 3.96a.75.75 0 1 1-1.04 1.08l-5.5-5.25a.75.75 0 0 1 0-1.08l5.5-5.25a.75.75 0 1 1 1.04 1.08L5.612 9.25H16.25A.75.75 0 0 1 17 10Z" clipRule="evenodd" />
               </svg>
-            </a>
+            </Link>
             <div>
               <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Settings</h1>
               <p className="text-xs text-zinc-500">Notifications, logs & diagnostics</p>
@@ -571,11 +633,7 @@ export default function SettingsPage() {
                         type="time"
                         defaultValue={notifSettings.quietHoursStart}
                         onBlur={(e) => {
-                          fetch("/api/settings", {
-                            method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ quiet_hours_start: e.target.value }),
-                          }).then(() => fetchNotifSettings());
+                          void patchSettings({ quiet_hours_start: e.target.value }).catch(() => {});
                         }}
                         className="rounded-lg bg-zinc-100 dark:bg-zinc-800/40 border border-zinc-300 dark:border-zinc-700/50 px-3 py-1.5 text-xs text-zinc-800 dark:text-zinc-200 outline-none focus:border-sky-500/50"
                       />
@@ -584,11 +642,7 @@ export default function SettingsPage() {
                         type="time"
                         defaultValue={notifSettings.quietHoursEnd}
                         onBlur={(e) => {
-                          fetch("/api/settings", {
-                            method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ quiet_hours_end: e.target.value }),
-                          }).then(() => fetchNotifSettings());
+                          void patchSettings({ quiet_hours_end: e.target.value }).catch(() => {});
                         }}
                         className="rounded-lg bg-zinc-100 dark:bg-zinc-800/40 border border-zinc-300 dark:border-zinc-700/50 px-3 py-1.5 text-xs text-zinc-800 dark:text-zinc-200 outline-none focus:border-sky-500/50"
                       />
@@ -617,11 +671,7 @@ export default function SettingsPage() {
                             const newThresholds = active
                               ? notifSettings.defaultThresholds.filter((x) => x !== value)
                               : [...notifSettings.defaultThresholds, value].sort((a, b) => b - a);
-                            fetch("/api/settings", {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ default_thresholds: newThresholds }),
-                            }).then(() => fetchNotifSettings());
+                            void patchSettings({ default_thresholds: newThresholds }).catch(() => {});
                           }}
                           className={`rounded-lg px-4 py-2 text-sm font-mono font-medium border transition-colors ${
                             active
@@ -630,6 +680,33 @@ export default function SettingsPage() {
                                 : severity === "critical"
                                   ? "bg-orange-500/10 text-orange-500 dark:text-orange-400 border-orange-500/20"
                                   : "bg-amber-500/10 text-amber-500 dark:text-amber-400 border-amber-500/20"
+                              : "bg-zinc-100 dark:bg-zinc-800/40 text-zinc-500 border-zinc-300 dark:border-zinc-700/40 hover:border-zinc-400 dark:hover:border-zinc-600"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/50 p-6">
+                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Depleted Reminder Interval</h3>
+                  <p className="text-[11px] text-zinc-500 mb-4">
+                    The first depleted alert fires immediately. If a quota window stays at 0% remaining, send another reminder on the next qualifying refresh after this cooldown.
+                  </p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {EXHAUSTED_REMINDER_OPTIONS.map(({ value, label }) => {
+                      const active = notifSettings.exhaustedReminderMins === value;
+                      return (
+                        <button
+                          key={value}
+                          onClick={() => {
+                            void patchSettings({ exhausted_reminder_mins: value }).catch(() => {});
+                          }}
+                          className={`rounded-lg px-4 py-2 text-sm font-mono font-medium border transition-colors ${
+                            active
+                              ? "bg-red-500/10 text-red-500 dark:text-red-400 border-red-500/20"
                               : "bg-zinc-100 dark:bg-zinc-800/40 text-zinc-500 border-zinc-300 dark:border-zinc-700/40 hover:border-zinc-400 dark:hover:border-zinc-600"
                           }`}
                         >
@@ -650,11 +727,11 @@ export default function SettingsPage() {
                     </div>
                     <div className="flex gap-2">
                       <span className="text-base">⚠️</span>
-                      <p>Alerts fire when remaining drops below your thresholds (15%, 10%, 5%). Each level fires once per cycle.</p>
+                      <p>Alerts fire when remaining drops below your thresholds (15%, 10%, 5%). Warning and critical levels still fire once per cycle.</p>
                     </div>
                     <div className="flex gap-2">
                       <span className="text-base">🚨</span>
-                      <p>When a quota hits 0% remaining, you get an <strong>alarm-level</strong> alert with urgent sound — unmissable.</p>
+                      <p>When a quota hits 0% remaining, you get an <strong>alarm-level</strong> alert with urgent sound. If it stays depleted, reminders repeat based on your selected cooldown.</p>
                     </div>
                     <div className="flex gap-2">
                       <span className="text-base">✅</span>

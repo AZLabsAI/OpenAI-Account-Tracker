@@ -8,7 +8,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getAccount, updateAccount } from "@/lib/db";
-import { fetchQuota } from "@/lib/codex-appserver";
 import { logInfo, logSuccess, logError } from "@/lib/logger";
 import { detectTransitions, processTransitions } from "@/lib/notifications";
 import { getNotificationSettings } from "@/lib/notify-settings";
@@ -45,6 +44,7 @@ export async function POST(
       detail: { codexHomePath: account.codexHomePath },
     });
 
+    const { fetchQuota } = await import("@/lib/codex-appserver");
     const quotaData = await fetchQuota(account.codexHomePath);
 
     // ── Detect transitions BEFORE saving (old vs new comparison) ──────────
@@ -54,6 +54,7 @@ export async function POST(
       account.quotaData,
       quotaData,
       settings.defaultThresholds,
+      settings.exhaustedReminderMins,
     );
 
     // Process notifications (dedup + deliver)

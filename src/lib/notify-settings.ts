@@ -6,6 +6,13 @@
 
 import { getSetting } from "./db";
 import type { NotificationSettings } from "@/types";
+import {
+  DEFAULT_QUIET_HOURS_END,
+  DEFAULT_QUIET_HOURS_START,
+  parseStoredReminderMins,
+  parseStoredThresholds,
+  parseStoredTime,
+} from "./settings-validation";
 
 export function getTelegramCredentials(): { botToken: string; chatId: string } | null {
   const botToken = process.env.TELEGRAM_BOT_TOKEN || getSetting("telegram_bot_token");
@@ -39,9 +46,10 @@ export function getNotificationSettings(): NotificationSettings {
     telegramBotTokenMasked: telegramCreds ? maskToken(telegramCreds.botToken) : null,
     telegramChatId: telegramCreds?.chatId ?? getSetting("telegram_chat_id") ?? null,
     quietHoursEnabled: (getSetting("quiet_hours_enabled") ?? "false") === "true",
-    quietHoursStart: getSetting("quiet_hours_start") ?? "22:00",
-    quietHoursEnd: getSetting("quiet_hours_end") ?? "07:00",
-    defaultThresholds: JSON.parse(getSetting("default_thresholds") ?? "[15, 10, 5, 0]"),
+    quietHoursStart: parseStoredTime(getSetting("quiet_hours_start"), DEFAULT_QUIET_HOURS_START),
+    quietHoursEnd: parseStoredTime(getSetting("quiet_hours_end"), DEFAULT_QUIET_HOURS_END),
+    defaultThresholds: parseStoredThresholds(getSetting("default_thresholds")),
+    exhaustedReminderMins: parseStoredReminderMins(getSetting("exhausted_reminder_mins")),
   };
 }
 

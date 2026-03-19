@@ -9,55 +9,10 @@
  *   2. fetchQuota(codexHomePath) — reads live rate-limit data from the running account
  */
 
-import { spawn, ChildProcessWithoutNullStreams } from "child_process";
+import type { ChildProcessWithoutNullStreams } from "child_process";
 import { createInterface } from "readline";
-import { homedir } from "os";
-import { existsSync } from "fs";
 import type { QuotaData } from "@/types";
-
-// ─── Path to the real codex binary — cross-platform ─────────────────────────
-function getCodexBin(): string {
-  const home = homedir();
-  const isWin = process.platform === "win32";
-
-  // Platform-specific binary names
-  const candidates: string[] = isWin
-    ? [
-        `${home}\\.local\\opt\\codex\\current\\codex-x86_64-pc-windows-msvc.exe`,
-        `${home}\\AppData\\Local\\codex\\codex.exe`,
-        `${home}\\bin\\codex.exe`,
-      ]
-    : process.arch === "arm64"
-      ? [
-          `${home}/.local/opt/codex/current/codex-aarch64-apple-darwin`,
-          `${home}/.local/opt/codex/current/codex`,
-          `${home}/bin/codex`,
-        ]
-      : [
-          `${home}/.local/opt/codex/current/codex-x86_64-unknown-linux-gnu`,
-          `${home}/.local/opt/codex/current/codex`,
-          `${home}/bin/codex`,
-        ];
-
-  for (const p of candidates) {
-    if (existsSync(p)) return p;
-  }
-
-  // Try finding `codex` on PATH as last resort
-  const pathCmd = isWin ? "codex.exe" : "codex";
-  try {
-    const { execSync } = require("child_process");
-    const resolved = execSync(isWin ? `where ${pathCmd}` : `which ${pathCmd}`, {
-      encoding: "utf-8",
-      timeout: 3000,
-    }).trim().split("\n")[0];
-    if (resolved && existsSync(resolved)) return resolved;
-  } catch { /* not on PATH */ }
-
-  throw new Error(
-    `Codex binary not found. Install Codex CLI and ensure it's in one of:\n${candidates.join("\n")}`,
-  );
-}
+import { getCodexBinaryPath } from "./codex-binary";
 
 // ─── JSON-RPC helpers ────────────────────────────────────────────────────────
 
@@ -77,8 +32,9 @@ interface AppServerSession {
   kill: () => void;
 }
 
-function spawnAppServer(codexHomePath: string): AppServerSession {
-  const bin = getCodexBin();
+async function spawnAppServer(codexHomePath: string): Promise<AppServerSession> {
+  const { spawn } = await import("child_process");
+  const bin = await getCodexBinaryPath();
   const env = {
     ...process.env,
     CODEX_HOME: codexHomePath,
@@ -86,7 +42,7 @@ function spawnAppServer(codexHomePath: string): AppServerSession {
     CODEX_SKIP_UPDATE_CHECK: "1",
   };
 
-  const proc = spawn(bin, ["app-server"], {
+  const proc = spawn(/* turbopackIgnore: true */ bin, ["app-server"], {
     env,
     stdio: ["pipe", "pipe", "pipe"],
   });
@@ -156,7 +112,7 @@ export async function loginAccount(
   timeoutMs = 5 * 60 * 1000,
   onAuthUrl?: (url: string) => void,
 ): Promise<LoginResult> {
-  const session = spawnAppServer(codexHomePath);
+  const session = await spawnAppServer(codexHomePath);
   const msgGen = session.messages();
 
   // Capture stderr for debugging
@@ -171,10 +127,6 @@ export async function loginAccount(
     // Send login request
     session.send(makeRequest(2, "account/login/start", { type: "chatgpt" }));
 
-    // Wait for the response (id: 2) to get the authUrl + loginId
-    // loginId is used by CancelLoginAccountParams if we ever need to cancel
-    let _loginId: string | null = null;
-
     const loginResponsePromise = (async () => {
       // Use .next() directly — NOT for-await-of — to preserve the generator across the loop
       while (true) {
@@ -185,7 +137,6 @@ export async function loginAccount(
         if (msg.id === 2 && "result" in msg) {
           const result = msg.result as Record<string, unknown>;
           if (result.type === "chatgpt") {
-            _loginId = result.loginId as string;
             const url = result.authUrl as string;
             // Open the system browser
             const { exec } = await import("child_process");
@@ -233,7 +184,7 @@ export async function loginAccount(
  * The account must already be logged in (auth.json must exist in codexHomePath).
  */
 export async function fetchQuota(codexHomePath: string): Promise<QuotaData> {
-  const session = spawnAppServer(codexHomePath);
+  const session = await spawnAppServer(codexHomePath);
   const msgGen = session.messages();
 
   const stderrChunks: string[] = [];

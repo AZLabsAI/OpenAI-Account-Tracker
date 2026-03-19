@@ -1,5 +1,5 @@
 import { Account } from "@/types";
-import { getAccountStatus } from "@/data/accounts";
+import { getDerivedAccountHealth } from "@/lib/account-health";
 
 interface Props {
   accounts: Account[];
@@ -10,13 +10,13 @@ export function DashboardStats({ accounts }: Props) {
   const starred = accounts.filter((a) => a.starred).length;
   const inUse = accounts.filter((a) => a.inUse).length;
   const active = accounts.filter((a) => {
-    const s = getAccountStatus(a);
-    return s === "active" || s === "in-use";
+    const health = getDerivedAccountHealth(a);
+    return a.inUse || (
+      health.quotaStatus === "normal"
+      && health.subscriptionStatus !== "expired"
+      && health.subscriptionStatus !== "unknown"
+    );
   }).length;
-  const expiringSoon = accounts.filter(
-    (a) => getAccountStatus(a) === "expiring-soon",
-  ).length;
-
   const stats: { label: string; value: number; accent: string }[] = [
     { label: "Total Accounts", value: total, accent: "text-zinc-900 dark:text-zinc-100" },
     { label: "Starred", value: starred, accent: "text-amber-500 dark:text-amber-400" },

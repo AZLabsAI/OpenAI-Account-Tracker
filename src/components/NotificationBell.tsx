@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { NotificationEvent } from "@/types";
 
@@ -9,7 +10,7 @@ const EVENT_CONFIG: Record<string, { emoji: string; color: string; label: string
   quota_exhausted: { emoji: "⛔", color: "text-red-400",     label: "Exhausted" },
   quota_critical:  { emoji: "🔴", color: "text-orange-400",  label: "Critical" },
   quota_warning:   { emoji: "⚠️",  color: "text-amber-400",   label: "Warning" },
-  quota_reset:     { emoji: "✅", color: "text-emerald-400", label: "Reset" },
+  quota_reset:     { emoji: "✅", color: "text-emerald-400", label: "Replenished" },
   account_switch:  { emoji: "🔄", color: "text-blue-400",    label: "Switch" },
 };
 
@@ -45,9 +46,25 @@ export function NotificationBell() {
 
   // Poll every 15s
   useEffect(() => {
-    fetchNotifications();
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/notifications?limit=20");
+        if (!res.ok || cancelled) return;
+        const data = await res.json() as { events: NotificationEvent[]; unacknowledgedCount: number };
+        if (cancelled) return;
+        setEvents(data.events);
+        setUnreadCount(data.unacknowledgedCount);
+      } catch {
+        // silent
+      }
+    })();
+
     const id = setInterval(fetchNotifications, 15_000);
-    return () => clearInterval(id);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, [fetchNotifications]);
 
   // Close on outside click
@@ -163,12 +180,12 @@ export function NotificationBell() {
           {/* Footer */}
           {events.length > 0 && (
             <div className="border-t border-zinc-200 dark:border-zinc-800/50 px-4 py-2.5 text-center">
-              <a
+              <Link
                 href="/settings"
                 className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
               >
                 Notification settings →
-              </a>
+              </Link>
             </div>
           )}
         </div>

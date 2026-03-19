@@ -1,5 +1,5 @@
 import { Account, AccountType } from "@/types";
-import type { AccountStatus } from "@/types";
+import { getSortRank } from "@/lib/account-health";
 
 /**
  * Seed accounts — used only to populate a fresh database on first run.
@@ -57,6 +57,10 @@ export const accounts: Account[] = [
  *  inUse is purely a visual indicator — it does NOT affect sort position. */
 export function getSortedAccounts(accs: Account[]): Account[] {
   return [...accs].sort((a, b) => {
+    const aRank = getSortRank(a);
+    const bRank = getSortRank(b);
+    if (aRank !== bRank) return aRank - bRank;
+
     // Pinned first, ordered by pinOrder
     if (a.pinned && !b.pinned) return -1;
     if (!a.pinned && b.pinned) return 1;
@@ -68,24 +72,9 @@ export function getSortedAccounts(accs: Account[]): Account[] {
   });
 }
 
-/** Derive account health from its expiration date + inUse flag. */
-export function getAccountStatus(account: Account): AccountStatus {
-  if (account.inUse) return "in-use";
-
-  const now = new Date();
-  const exp = new Date(account.expirationDate);
-  if (isNaN(exp.getTime())) return "unknown";
-  if (exp < now) return "expired";
-
-  const daysLeft = Math.ceil(
-    (exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-  );
-  if (daysLeft <= 14) return "expiring-soon";
-  return "active";
-}
-
 /** Format an ISO date string to a readable form. */
-export function formatDate(iso: string): string {
+export function formatDate(iso?: string | null): string {
+  if (!iso) return "Never";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("en-US", {
@@ -96,8 +85,10 @@ export function formatDate(iso: string): string {
 }
 
 /** Days remaining until expiration. */
-export function daysUntilExpiration(iso: string): number {
+export function daysUntilExpiration(iso?: string | null): number | null {
+  if (!iso) return null;
   const now = new Date();
   const exp = new Date(iso);
+  if (isNaN(exp.getTime())) return null;
   return Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
