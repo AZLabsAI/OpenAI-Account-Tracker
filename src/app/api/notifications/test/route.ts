@@ -58,8 +58,8 @@ export async function POST(req: NextRequest) {
   // Pick a real account for realistic test content
   const accounts = getAllAccounts();
   const testAccount = accounts[0];
-  const accountName = testAccount?.name ?? "Vibe Code AI";
-  const accountEmail = testAccount?.email ?? "vibecodeai@gmail.com";
+  const accountName = testAccount?.name ?? "Example Account";
+  const accountEmail = testAccount?.email ?? "account@example.com";
 
   const context = buildTestContext(eventType, accountName, accountEmail);
   const webPreview: NotificationPreview = {
