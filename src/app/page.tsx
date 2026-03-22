@@ -14,6 +14,7 @@ async function persist(id: string, patch: Partial<Account>) {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
+    keepalive: true,
   });
 }
 
@@ -127,31 +128,12 @@ export default function Home() {
     fireWebNotification,
   });
 
-  // ── Sync inUse flags with whichever account is logged into ~/.codex ────────
-  const syncActiveCodex = useCallback(async (currentAccounts?: Account[]) => {
+  // ── Poll active Codex session for notifications / diagnostics only ─────────
+  // Do NOT sync this into the manual `inUse` flag; users can mark multiple
+  // accounts as in use independently of the live Codex session.
+  const syncActiveCodex = useCallback(async () => {
     try {
-      const res = await fetch("/api/accounts/active-codex");
-      if (!res.ok) return;
-      const data = await res.json() as {
-        activeEmail: string | null;
-        matchedAccountId: string | null;
-      };
-      if (!data.activeEmail) return;
-
-      // Update local state to reflect whichever account is active
-      setAccounts((prev) => {
-        const base = currentAccounts ?? prev;
-        let changed = false;
-        const next = base.map((a) => {
-          const shouldBeInUse = a.id === data.matchedAccountId;
-          if (a.inUse !== shouldBeInUse) {
-            changed = true;
-            return { ...a, inUse: shouldBeInUse };
-          }
-          return a;
-        });
-        return changed ? next : base;
-      });
+      await fetch("/api/accounts/active-codex");
     } catch { /* silent — detection is best-effort */ }
   }, []);
 
@@ -169,8 +151,8 @@ export default function Home() {
         setChatgptAgentOptions(dedupeLabels(agentOptions.chatgptOptions));
       }
       setLoading(false);
-      // Sync active account right after initial load
-      syncActiveCodex(accountData);
+      // Poll active Codex for notifications / diagnostics only
+      syncActiveCodex();
     });
   }, [syncActiveCodex]);
 

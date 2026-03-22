@@ -16,7 +16,7 @@
 
 import { NextResponse } from "next/server";
 import { readFileSync, existsSync } from "fs";
-import { getAllAccounts, updateAccount } from "@/lib/db";
+import { getAllAccounts, getSetting, setSetting } from "@/lib/db";
 import { getLiveAuthPath } from "@/lib/codex-paths";
 import { notifyAccountSwitch } from "@/lib/notifications";
 
@@ -64,41 +64,49 @@ export async function GET() {
       });
     }
 
-    // 3. Match against DB accounts and update inUse flags
+    // 3. Match against DB accounts. IMPORTANT: do NOT overwrite the manual
+    // `inUse` flag here — users can have multiple accounts marked in use.
     const accounts = getAllAccounts();
     const matched = accounts.find(
       (a) => a.email.toLowerCase() === activeEmail.toLowerCase(),
     );
 
-    // Find the previously active account
-    const previouslyActive = accounts.find((a) => a.inUse && a.id !== matched?.id);
-
-    // Clear inUse on all accounts, then set on the matched one
-    for (const acc of accounts) {
-      if (acc.inUse && acc.id !== matched?.id) {
-        updateAccount(acc.id, { inUse: false });
-      }
-    }
+    const previousMatchedId = getSetting("active_codex_matched_account_id");
+    const previousActiveEmail = getSetting("active_codex_email");
+    const previousTrackedAccount = previousMatchedId
+      ? accounts.find((account) => account.id === previousMatchedId)
+      : undefined;
 
     let switched = false;
-    if (matched && !matched.inUse) {
-      updateAccount(matched.id, { inUse: true });
-      switched = true;
 
-      // Fire account switch notification
-      if (previouslyActive) {
-        await notifyAccountSwitch(matched, previouslyActive.name);
+    if (matched) {
+      switched = previousMatchedId !== matched.id || previousActiveEmail?.toLowerCase() !== activeEmail.toLowerCase();
+      if (switched) {
+        await notifyAccountSwitch(matched, previousTrackedAccount?.name);
       }
+      setSetting("active_codex_matched_account_id", matched.id);
+      setSetting("active_codex_email", activeEmail);
+
+      return NextResponse.json({
+        activeEmail,
+        matchedAccountId: matched.id,
+        matchedAccountName: matched.name,
+        switched,
+        message: `${matched.name} (${activeEmail}) is the active Codex account`,
+      });
     }
+
+    // Unmatched live Codex accounts should not clear any manual UI state.
+    switched = previousActiveEmail?.toLowerCase() !== activeEmail.toLowerCase() || Boolean(previousMatchedId);
+    setSetting("active_codex_matched_account_id", "");
+    setSetting("active_codex_email", activeEmail);
 
     return NextResponse.json({
       activeEmail,
-      matchedAccountId: matched?.id ?? null,
-      matchedAccountName: matched?.name ?? null,
+      matchedAccountId: null,
+      matchedAccountName: null,
       switched,
-      message: matched
-        ? `${matched.name} (${activeEmail}) is the active Codex account`
-        : `${activeEmail} is logged in via ${liveAuthPath} but doesn't match any tracked account`,
+      message: `${activeEmail} is logged in via ${liveAuthPath} but doesn't match any tracked account`,
     });
   } catch (err) {
     return NextResponse.json(
