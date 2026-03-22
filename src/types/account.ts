@@ -23,17 +23,7 @@ export type SubscriptionStatus = "active" | "expiring" | "expired" | "unknown";
 export type AccountStatus = "in-use" | "active" | "waiting-refresh" | "expiring-soon" | "expired" | "unknown";
 
 /** Codex / agent machines an account can be assigned to. */
-export type CodexAgent =
-  | "Eve"
-  | "Ava"
-  | "Codex on MacBook"
-  | "Codex on Ava-PC"
-  | "Codex on Work-PC"
-  | "Codex CLI on MacBook"
-  | "Codex CLI on Ava-PC"
-  | "Codex CLI on Work-PC"
-  | "OpenCode on MacBook"
-  | "Pi Agent on MacBook";
+export type CodexAgent = string;
 
 export const CODEX_AGENTS: CodexAgent[] = [
   "Eve",
@@ -49,10 +39,7 @@ export const CODEX_AGENTS: CodexAgent[] = [
 ];
 
 /** ChatGPT client devices an account can be assigned to. */
-export type ChatGPTAgent =
-  | "ChatGPT on MacBook"
-  | "ChatGPT on iPhone"
-  | "ChatGPT on Work-PC";
+export type ChatGPTAgent = string;
 
 export const CHATGPT_AGENTS: ChatGPTAgent[] = [
   "ChatGPT on MacBook",

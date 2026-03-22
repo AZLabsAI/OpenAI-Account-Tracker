@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState, useCallback, useRef, useEffect } from "react";
-import { Account, CODEX_AGENTS, CHATGPT_AGENTS, CodexAgent, ChatGPTAgent, ACCOUNT_TYPES, AccountType } from "@/types";
+import { Account, CodexAgent, ChatGPTAgent, ACCOUNT_TYPES, AccountType } from "@/types";
 import { formatDate, daysUntilExpiration } from "@/data/accounts";
 import { getAccountStatus, getExpiryBorderUrgency } from "@/lib/account-health";
 import type { LoginState, QuotaState } from "@/hooks/useAccountRefreshController";
@@ -39,6 +39,10 @@ interface Props {
   quotaState: QuotaState;
   quotaError: string | null;
   onUpdateSettings: (id: string, patch: Partial<Account>) => void;
+  availableCodexAgents: CodexAgent[];
+  availableChatGPTAgents: ChatGPTAgent[];
+  onUpdateCodexAgentOptions: (agents: CodexAgent[]) => void;
+  onUpdateChatGPTAgentOptions: (agents: ChatGPTAgent[]) => void;
   showInUseAutoRefreshNotice?: boolean;
 }
 
@@ -60,6 +64,10 @@ export function AccountCard({
   quotaState,
   quotaError,
   onUpdateSettings,
+  availableCodexAgents,
+  availableChatGPTAgents,
+  onUpdateCodexAgentOptions,
+  onUpdateChatGPTAgentOptions,
   showInUseAutoRefreshNotice = false,
 }: Props) {
   const [copied, setCopied] = useState(false);
@@ -69,6 +77,8 @@ export function AccountCard({
   const [editName, setEditName] = useState(account.name);
   const [savingName, setSavingName] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
+  const [codexAgentInput, setCodexAgentInput] = useState("");
+  const [chatgptAgentInput, setChatgptAgentInput] = useState("");
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -87,6 +97,12 @@ export function AccountCard({
   const isInUse = account.inUse;
   const isPinned = account.pinned;
   const hasCodexHome = Boolean(account.codexHomePath);
+  const codexOptionsForAssign = availableCodexAgents.filter(
+    (agent) => !(account.codexAssignedTo ?? []).some((value) => value.toLowerCase() === agent.toLowerCase()),
+  );
+  const chatgptOptionsForAssign = availableChatGPTAgents.filter(
+    (agent) => !(account.chatgptAssignedTo ?? []).some((value) => value.toLowerCase() === agent.toLowerCase()),
+  );
 
   const dropdownArrow = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2371717a' d='M3 4.5L6 8l3-3.5H3z'/%3E%3C/svg%3E")`;
 
@@ -125,6 +141,43 @@ export function AccountCard({
       setSavingName(false);
     }
   }, [account.id, account.name, editName, onUpdateSettings]);
+
+  const addUniqueAgent = useCallback((existing: string[], rawValue: string) => {
+    const trimmed = rawValue.trim();
+    if (!trimmed) return existing;
+    if (existing.some((value) => value.toLowerCase() === trimmed.toLowerCase())) return existing;
+    return [...existing, trimmed];
+  }, []);
+
+  const addCodexAgentOptionAndAssign = useCallback(() => {
+    const nextOptions = addUniqueAgent(availableCodexAgents, codexAgentInput);
+    const nextAssigned = addUniqueAgent(account.codexAssignedTo ?? [], codexAgentInput);
+
+    if (nextOptions !== availableCodexAgents) {
+      onUpdateCodexAgentOptions(nextOptions);
+    }
+    if (nextAssigned !== (account.codexAssignedTo ?? [])) {
+      onAssignCodex(account.id, nextAssigned);
+    }
+    if (nextOptions !== availableCodexAgents || nextAssigned !== (account.codexAssignedTo ?? [])) {
+      setCodexAgentInput("");
+    }
+  }, [account.codexAssignedTo, account.id, addUniqueAgent, availableCodexAgents, codexAgentInput, onAssignCodex, onUpdateCodexAgentOptions]);
+
+  const addChatGPTAgentOptionAndAssign = useCallback(() => {
+    const nextOptions = addUniqueAgent(availableChatGPTAgents, chatgptAgentInput);
+    const nextAssigned = addUniqueAgent(account.chatgptAssignedTo ?? [], chatgptAgentInput);
+
+    if (nextOptions !== availableChatGPTAgents) {
+      onUpdateChatGPTAgentOptions(nextOptions);
+    }
+    if (nextAssigned !== (account.chatgptAssignedTo ?? [])) {
+      onAssignChatGPT(account.id, nextAssigned);
+    }
+    if (nextOptions !== availableChatGPTAgents || nextAssigned !== (account.chatgptAssignedTo ?? [])) {
+      setChatgptAgentInput("");
+    }
+  }, [account.chatgptAssignedTo, account.id, addUniqueAgent, availableChatGPTAgents, chatgptAgentInput, onAssignChatGPT, onUpdateChatGPTAgentOptions]);
 
   // ── Card border style (shared by both faces) ──────────────────────────────
   // ── Avatar upload ──────────────────────────────────────────────────────────
@@ -358,9 +411,9 @@ export function AccountCard({
                 <p className="font-mono font-semibold text-zinc-800 dark:text-zinc-200 text-[13px]">{daysRemainingLabel}</p>
               </div>
               <div className="space-y-2.5">
-                {/* Codex O-Auth – multi */}
+                {/* Codex OAuth – multi */}
                 <div>
-                  <span className="text-zinc-500 dark:text-zinc-500 text-xs">Codex O-Auth</span>
+                  <span className="text-zinc-500 dark:text-zinc-500 text-xs">Codex OAuth</span>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {(account.codexAssignedTo ?? []).map((agent) => (
                       <span key={agent} className="inline-flex items-center gap-1 rounded-md bg-violet-500/15 border border-violet-500/25 px-1.5 py-0.5 text-[11px] font-medium text-violet-300">
@@ -371,7 +424,7 @@ export function AccountCard({
                         >×</button>
                       </span>
                     ))}
-                    {(account.codexAssignedTo ?? []).length < CODEX_AGENTS.length && (
+                    {codexOptionsForAssign.length > 0 && (
                       <select
                         value=""
                         onChange={(e) => {
@@ -382,7 +435,7 @@ export function AccountCard({
                         style={{ backgroundImage: "none", width: "auto" }}
                       >
                         <option value="">+ Add</option>
-                        {CODEX_AGENTS.filter((a) => !(account.codexAssignedTo ?? []).includes(a)).map((agent) => (
+                        {codexOptionsForAssign.map((agent) => (
                           <option key={agent} value={agent}>{agent}</option>
                         ))}
                       </select>
@@ -402,7 +455,7 @@ export function AccountCard({
                         >×</button>
                       </span>
                     ))}
-                    {(account.chatgptAssignedTo ?? []).length < CHATGPT_AGENTS.length && (
+                    {chatgptOptionsForAssign.length > 0 && (
                       <select
                         value=""
                         onChange={(e) => {
@@ -413,7 +466,7 @@ export function AccountCard({
                         style={{ backgroundImage: "none", width: "auto" }}
                       >
                         <option value="">+ Add</option>
-                        {CHATGPT_AGENTS.filter((a) => !(account.chatgptAssignedTo ?? []).includes(a)).map((agent) => (
+                        {chatgptOptionsForAssign.map((agent) => (
                           <option key={agent} value={agent}>{agent}</option>
                         ))}
                       </select>
@@ -732,6 +785,91 @@ export function AccountCard({
                   )}
                 </div>
               </div>
+
+              {/* ── Assignment settings ─────────────────────────────── */}
+              <div>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-2 block">
+                  Assignment Options
+                </label>
+                <p className="text-[11px] text-zinc-600 mb-3 leading-relaxed">
+                  Add your own Codex OAuth and ChatGPT labels here. They are stored locally and then appear in the front-card + Add menus.
+                </p>
+
+                <div className="space-y-4">
+                  <div>
+                    <span className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300">Saved Codex OAuth Options</span>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {availableCodexAgents.map((agent) => (
+                        <span key={agent} className="inline-flex items-center gap-1 rounded-md bg-violet-500/15 border border-violet-500/25 px-1.5 py-0.5 text-[11px] font-medium text-violet-300">
+                          {agent}
+                          <button
+                            onClick={() => onUpdateCodexAgentOptions(availableCodexAgents.filter((value) => value !== agent))}
+                            className="text-violet-400 hover:text-violet-200 transition-colors leading-none"
+                            title="Remove saved option"
+                          >×</button>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        value={codexAgentInput}
+                        onChange={(e) => setCodexAgentInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addCodexAgentOptionAndAssign();
+                          }
+                        }}
+                        placeholder="Add Codex OAuth option"
+                        className="min-w-0 flex-1 rounded-md border border-zinc-300 dark:border-zinc-700/60 bg-zinc-100 dark:bg-zinc-800/70 px-2 py-1 text-[11px] text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 outline-none focus:border-violet-400 dark:focus:border-violet-500/60"
+                      />
+                      <button
+                        onClick={addCodexAgentOptionAndAssign}
+                        className="rounded-md border border-zinc-300 dark:border-zinc-700/60 bg-zinc-100 dark:bg-zinc-800/70 px-2 py-1 text-[11px] font-medium text-zinc-700 dark:text-zinc-300 hover:border-violet-400 dark:hover:border-violet-500/60 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300">Saved ChatGPT Assigned To Options</span>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {availableChatGPTAgents.map((agent) => (
+                        <span key={agent} className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 border border-emerald-500/25 px-1.5 py-0.5 text-[11px] font-medium text-emerald-300">
+                          {agent}
+                          <button
+                            onClick={() => onUpdateChatGPTAgentOptions(availableChatGPTAgents.filter((value) => value !== agent))}
+                            className="text-emerald-400 hover:text-emerald-200 transition-colors leading-none"
+                            title="Remove saved option"
+                          >×</button>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        value={chatgptAgentInput}
+                        onChange={(e) => setChatgptAgentInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addChatGPTAgentOptionAndAssign();
+                          }
+                        }}
+                        placeholder="Add ChatGPT assignment option"
+                        className="min-w-0 flex-1 rounded-md border border-zinc-300 dark:border-zinc-700/60 bg-zinc-100 dark:bg-zinc-800/70 px-2 py-1 text-[11px] text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 outline-none focus:border-emerald-400 dark:focus:border-emerald-500/60"
+                      />
+                      <button
+                        onClick={addChatGPTAgentOptionAndAssign}
+                        className="rounded-md border border-zinc-300 dark:border-zinc-700/60 bg-zinc-100 dark:bg-zinc-800/70 px-2 py-1 text-[11px] font-medium text-zinc-700 dark:text-zinc-300 hover:border-emerald-400 dark:hover:border-emerald-500/60 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* ── Danger zone ──────────────────────────────────────── */}
               <div>
                 <label className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-2 block">

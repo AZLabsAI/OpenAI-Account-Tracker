@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { getSortedAccounts } from "@/data/accounts";
-import { Account, CodexAgent, ChatGPTAgent, AccountType } from "@/types";
+import { Account, CodexAgent, ChatGPTAgent, AccountType, CODEX_AGENTS, CHATGPT_AGENTS } from "@/types";
 import { AccountCard, AddAccountCard, NotificationBell } from "@/components";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAccountRefreshController } from "@/hooks/useAccountRefreshController";
@@ -33,6 +33,22 @@ function hasUsableQuota(account: Account) {
   return getQuotaStatus(account) !== "waiting-refresh";
 }
 
+function dedupeLabels<T extends string>(values: T[]): T[] {
+  const seen = new Set<string>();
+  const result: T[] = [];
+
+  for (const value of values) {
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(trimmed as T);
+  }
+
+  return result;
+}
+
 export default function Home() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,6 +56,8 @@ export default function Home() {
   const [filter, setFilter] = useState<Filter>("all");
   const [spinLevel, setSpinLevel] = useState(0);
   const [inUseAutoRefreshNotice, setInUseAutoRefreshNotice] = useState<Record<string, boolean>>({});
+  const [codexAgentOptions, setCodexAgentOptions] = useState<CodexAgent[]>(CODEX_AGENTS);
+  const [chatgptAgentOptions, setChatgptAgentOptions] = useState<ChatGPTAgent[]>(CHATGPT_AGENTS);
 
   // Spin decay — level drops by 1 every 2s when not clicking
   useEffect(() => {
@@ -139,14 +157,21 @@ export default function Home() {
 
   // Load from SQLite on mount, then immediately sync active Codex account
   useEffect(() => {
-    fetch("/api/accounts")
-      .then((r) => r.json())
-      .then((data: Account[]) => {
-        setAccounts(data);
-        setLoading(false);
-        // Sync active account right after initial load
-        syncActiveCodex(data);
-      });
+    Promise.all([
+      fetch("/api/accounts").then((r) => r.json() as Promise<Account[]>),
+      fetch("/api/agent-options")
+        .then((r) => r.ok ? r.json() as Promise<{ codexOptions: CodexAgent[]; chatgptOptions: ChatGPTAgent[] }> : null)
+        .catch(() => null),
+    ]).then(([accountData, agentOptions]) => {
+      setAccounts(accountData);
+      if (agentOptions) {
+        setCodexAgentOptions(dedupeLabels(agentOptions.codexOptions));
+        setChatgptAgentOptions(dedupeLabels(agentOptions.chatgptOptions));
+      }
+      setLoading(false);
+      // Sync active account right after initial load
+      syncActiveCodex(accountData);
+    });
   }, [syncActiveCodex]);
 
   // Poll ~/.codex/auth.json every 30s to detect account switches
@@ -157,6 +182,16 @@ export default function Home() {
 
   // ── Derived: sorted → filtered → searched ─────────────────────────────────
   const sorted = getSortedAccounts(accounts);
+
+  const availableCodexAgents = useMemo(
+    () => dedupeLabels([...codexAgentOptions, ...accounts.flatMap((account) => account.codexAssignedTo ?? [])]),
+    [accounts, codexAgentOptions],
+  );
+
+  const availableChatGPTAgents = useMemo(
+    () => dedupeLabels([...chatgptAgentOptions, ...accounts.flatMap((account) => account.chatgptAssignedTo ?? [])]),
+    [accounts, chatgptAgentOptions],
+  );
 
   const filtered = useMemo(() => {
     let result = sorted;
@@ -297,6 +332,26 @@ export default function Home() {
       }),
     );
   }, []);
+
+  const saveAgentOptions = useCallback(async (patch: { codexOptions?: CodexAgent[]; chatgptOptions?: ChatGPTAgent[] }) => {
+    await fetch("/api/agent-options", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+  }, []);
+
+  const updateCodexAgentOptions = useCallback((agents: CodexAgent[]) => {
+    const next = dedupeLabels(agents);
+    setCodexAgentOptions(next);
+    void saveAgentOptions({ codexOptions: next });
+  }, [saveAgentOptions]);
+
+  const updateChatGPTAgentOptions = useCallback((agents: ChatGPTAgent[]) => {
+    const next = dedupeLabels(agents);
+    setChatgptAgentOptions(next);
+    void saveAgentOptions({ chatgptOptions: next });
+  }, [saveAgentOptions]);
 
   // Count signed-in accounts for the Refresh All button
   const signedInCount = accounts.filter((a) => a.codexHomePath).length;
@@ -490,6 +545,10 @@ export default function Home() {
                       quotaState={quotaStates[account.id] ?? "idle"}
                       quotaError={quotaErrors[account.id] ?? null}
                       onUpdateSettings={updateSettings}
+                      availableCodexAgents={availableCodexAgents}
+                      availableChatGPTAgents={availableChatGPTAgents}
+                      onUpdateCodexAgentOptions={updateCodexAgentOptions}
+                      onUpdateChatGPTAgentOptions={updateChatGPTAgentOptions}
                       showInUseAutoRefreshNotice={Boolean(inUseAutoRefreshNotice[account.id])}
                     />
                   ))}
