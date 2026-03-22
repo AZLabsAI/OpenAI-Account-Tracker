@@ -1,38 +1,62 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Account, QuotaData } from "@/types";
+import type { Account, NotificationEvent, NotificationSettings, QuotaData } from "@/types";
 
-const { getLatestUnresolvedEvent } = vi.hoisted(() => ({
-  getLatestUnresolvedEvent: vi.fn(),
-}));
-
-vi.mock("./db", () => ({
+const {
   getLatestUnresolvedEvent,
+  hasUnresolvedEvent,
+  insertNotificationEvent,
+  markNotificationDelivered,
+  getNotificationSettings,
+  isQuietHours,
+  getTelegramCredentials,
+  sendTelegram,
+  sendNative,
+  logInfo,
+  logSuccess,
+  logWarn,
+} = vi.hoisted(() => ({
+  getLatestUnresolvedEvent: vi.fn(),
   hasUnresolvedEvent: vi.fn(),
   insertNotificationEvent: vi.fn(),
   markNotificationDelivered: vi.fn(),
-}));
-
-vi.mock("./notify-settings", () => ({
   getNotificationSettings: vi.fn(),
   isQuietHours: vi.fn(),
   getTelegramCredentials: vi.fn(),
-}));
-
-vi.mock("./notify-telegram", () => ({
   sendTelegram: vi.fn(),
-}));
-
-vi.mock("./notify-native", () => ({
   sendNative: vi.fn(),
-}));
-
-vi.mock("./logger", () => ({
   logInfo: vi.fn(),
   logSuccess: vi.fn(),
   logWarn: vi.fn(),
 }));
 
-import { detectTransitions } from "./notifications";
+vi.mock("./db", () => ({
+  getLatestUnresolvedEvent,
+  hasUnresolvedEvent,
+  insertNotificationEvent,
+  markNotificationDelivered,
+}));
+
+vi.mock("./notify-settings", () => ({
+  getNotificationSettings,
+  isQuietHours,
+  getTelegramCredentials,
+}));
+
+vi.mock("./notify-telegram", () => ({
+  sendTelegram,
+}));
+
+vi.mock("./notify-native", () => ({
+  sendNative,
+}));
+
+vi.mock("./logger", () => ({
+  logInfo,
+  logSuccess,
+  logWarn,
+}));
+
+import { detectTransitions, processTransitions } from "./notifications";
 
 function makeAccount(overrides: Partial<Account> = {}): Account {
   return {
@@ -49,6 +73,7 @@ function makeAccount(overrides: Partial<Account> = {}): Account {
 function makeQuotaData(primaryUsed: number | null, secondaryUsed: number | null): QuotaData {
   return {
     fetchedAt: "2026-03-19T12:00:00.000Z",
+    email: "notify@example.com",
     primary: primaryUsed === null ? null : {
       usedPercent: primaryUsed,
       resetsAt: 1_800_000_000,
@@ -62,11 +87,66 @@ function makeQuotaData(primaryUsed: number | null, secondaryUsed: number | null)
   };
 }
 
-describe("detectTransitions", () => {
+function makeEvent(id = 1): NotificationEvent {
+  return {
+    id,
+    accountId: "acc_notify",
+    eventType: "quota_exhausted",
+    window: "primary",
+    usedPercent: 100,
+    message: "depleted",
+    createdAt: "2026-03-19T12:00:00.000Z",
+    acknowledged: false,
+    deliveredWeb: false,
+    deliveredNative: false,
+    deliveredTelegram: false,
+    telegramMessageId: null,
+  };
+}
+
+function makeSettings(overrides: Partial<NotificationSettings> = {}): NotificationSettings {
+  return {
+    notificationsEnabled: true,
+    webEnabled: true,
+    nativeEnabled: true,
+    telegramEnabled: true,
+    telegramConfigured: true,
+    telegramSource: "db",
+    telegramBotTokenMasked: null,
+    telegramChatId: "123",
+    quietHoursEnabled: false,
+    quietHoursStart: "22:00",
+    quietHoursEnd: "07:00",
+    defaultThresholds: [15, 10, 5, 0],
+    exhaustedReminderMins: 240,
+    ...overrides,
+  };
+}
+
+describe("notifications", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-19T12:00:00.000Z"));
     getLatestUnresolvedEvent.mockReset();
+    hasUnresolvedEvent.mockReset();
+    insertNotificationEvent.mockReset();
+    markNotificationDelivered.mockReset();
+    getNotificationSettings.mockReset();
+    isQuietHours.mockReset();
+    getTelegramCredentials.mockReset();
+    sendTelegram.mockReset();
+    sendNative.mockReset();
+    logInfo.mockReset();
+    logSuccess.mockReset();
+    logWarn.mockReset();
+
+    hasUnresolvedEvent.mockReturnValue(false);
+    insertNotificationEvent.mockImplementation(() => makeEvent());
+    getNotificationSettings.mockReturnValue(makeSettings());
+    isQuietHours.mockReturnValue(false);
+    getTelegramCredentials.mockReturnValue({ botToken: "token", chatId: "chat" });
+    sendNative.mockReturnValue({ success: true, method: "terminal-notifier" });
+    sendTelegram.mockResolvedValue({ success: true, messageId: 123, attempts: 1, statusCode: 200 });
   });
 
   afterEach(() => {
@@ -119,5 +199,110 @@ describe("detectTransitions", () => {
       remainingPercent: 0,
       isReminder: true,
     });
+  });
+
+  it("honors delivery channel toggles", async () => {
+    getNotificationSettings.mockReturnValue(makeSettings({ nativeEnabled: false, telegramEnabled: true }));
+
+    await processTransitions(makeAccount(), [{
+      eventType: "quota_warning" as const,
+      triggerWindow: "primary" as const,
+      quota: makeQuotaData(90, 20),
+      remainingPercent: 10,
+      message: "warning",
+    }]);
+
+    expect(sendNative).not.toHaveBeenCalled();
+    expect(sendTelegram).toHaveBeenCalledTimes(1);
+  });
+
+  it("records but does not deliver during quiet hours", async () => {
+    isQuietHours.mockReturnValue(true);
+
+    await processTransitions(makeAccount(), [{
+      eventType: "quota_warning" as const,
+      triggerWindow: "primary" as const,
+      quota: makeQuotaData(90, 20),
+      remainingPercent: 10,
+      message: "warning",
+    }]);
+
+    expect(sendNative).not.toHaveBeenCalled();
+    expect(sendTelegram).not.toHaveBeenCalled();
+    expect(logInfo).toHaveBeenCalledWith(
+      "system",
+      expect.stringContaining("Quiet hours active"),
+    );
+    expect(logInfo).toHaveBeenCalledWith(
+      "notification",
+      expect.stringContaining("Delivery skipped during quiet hours"),
+      expect.objectContaining({
+        detail: expect.objectContaining({
+          outcome: "skipped",
+          reason: "quiet_hours",
+        }),
+      }),
+    );
+  });
+
+  it("logs successful telegram delivery metadata", async () => {
+    sendTelegram.mockResolvedValue({ success: true, messageId: 321, attempts: 2, statusCode: 200 });
+
+    await processTransitions(makeAccount(), [{
+      eventType: "quota_exhausted" as const,
+      triggerWindow: "primary" as const,
+      quota: makeQuotaData(100, 20),
+      remainingPercent: 0,
+      message: "depleted",
+    }]);
+
+    expect(markNotificationDelivered).toHaveBeenCalledWith(1, "telegram", 321);
+    expect(logSuccess).toHaveBeenCalledWith(
+      "notification",
+      expect.stringContaining("Delivered quota_exhausted via Telegram"),
+      expect.objectContaining({
+        detail: expect.objectContaining({
+          channel: "telegram",
+          outcome: "success",
+          attempts: 2,
+          statusCode: 200,
+        }),
+        durationMs: expect.any(Number),
+      }),
+    );
+  });
+
+  it("logs non-retryable telegram failures without marking delivery", async () => {
+    sendTelegram.mockResolvedValue({
+      success: false,
+      error: "chat not found",
+      transient: false,
+      attempts: 1,
+      statusCode: 400,
+    });
+
+    await processTransitions(makeAccount(), [{
+      eventType: "quota_exhausted" as const,
+      triggerWindow: "primary" as const,
+      quota: makeQuotaData(100, 20),
+      remainingPercent: 0,
+      message: "depleted",
+    }]);
+
+    expect(markNotificationDelivered).not.toHaveBeenCalledWith(1, "telegram", expect.anything());
+    expect(logWarn).toHaveBeenCalledWith(
+      "notification",
+      expect.stringContaining("Telegram delivery failed for quota_exhausted"),
+      expect.objectContaining({
+        detail: expect.objectContaining({
+          channel: "telegram",
+          outcome: "failure",
+          reason: "non_retryable_failure",
+          attempts: 1,
+          statusCode: 400,
+        }),
+        durationMs: expect.any(Number),
+      }),
+    );
   });
 });
