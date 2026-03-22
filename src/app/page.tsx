@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { getSortedAccounts } from "@/data/accounts";
 import { Account, CodexAgent, ChatGPTAgent, AccountType } from "@/types";
-import { AccountCard, DashboardStats, AddAccountCard, NotificationBell } from "@/components";
+import { AccountCard, AddAccountCard, NotificationBell } from "@/components";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAccountRefreshController } from "@/hooks/useAccountRefreshController";
 
@@ -375,8 +375,6 @@ export default function Home() {
           </div>
         ) : (
           <>
-            <DashboardStats accounts={accounts} />
-
             <section>
               {/* Search + Filter bar */}
               <div className="mb-6 space-y-3">
