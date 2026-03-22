@@ -354,6 +354,10 @@ export function updateAccount(id: string, patch: Partial<Account>): Account | nu
   const fields: string[] = [];
   const values: Record<string, unknown> = { id };
 
+  if (patch.name               !== undefined) { fields.push("name = @name");                             values.name              = patch.name; }
+  if (patch.email              !== undefined) { fields.push("email = @email");                           values.email             = patch.email; }
+  if (patch.subscription       !== undefined) { fields.push("subscription = @subscription");             values.subscription      = patch.subscription; }
+  if (patch.expirationDate     !== undefined) { fields.push("expirationDate = @expirationDate");         values.expirationDate    = patch.expirationDate ?? null; }
   if (patch.starred            !== undefined) { fields.push("starred = @starred");                       values.starred           = patch.starred ? 1 : 0; }
   if (patch.inUse              !== undefined) { fields.push("inUse = @inUse");                           values.inUse             = patch.inUse ? 1 : 0; }
   if (patch.pinned             !== undefined) { fields.push("pinned = @pinned");                         values.pinned            = patch.pinned ? 1 : 0; }

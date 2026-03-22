@@ -85,7 +85,7 @@ export async function POST(
     return NextResponse.json({
       ...quotaData,
       // Include any new notification events so the client can fire Web Notifications
-      notifications: notificationEvents.length > 0 ? notificationEvents : undefined,
+      notifications: settings.webEnabled && notificationEvents.length > 0 ? notificationEvents : undefined,
     });
 
   } catch (err) {

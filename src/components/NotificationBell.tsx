@@ -1,18 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type { NotificationEvent } from "@/types";
-
-// ─── Event type config ───────────────────────────────────────────────────────
-
-const EVENT_CONFIG: Record<string, { emoji: string; color: string; label: string }> = {
-  quota_exhausted: { emoji: "⛔", color: "text-red-400",     label: "Exhausted" },
-  quota_critical:  { emoji: "🔴", color: "text-orange-400",  label: "Critical" },
-  quota_warning:   { emoji: "⚠️",  color: "text-amber-400",   label: "Warning" },
-  quota_reset:     { emoji: "✅", color: "text-emerald-400", label: "Replenished" },
-  account_switch:  { emoji: "🔄", color: "text-blue-400",    label: "Switch" },
-};
+import { getNotificationUiMeta } from "@/lib/notification-presentation";
 
 function timeAgo(isoStr: string): string {
   const ms = Date.now() - new Date(isoStr).getTime();
@@ -31,6 +22,9 @@ export function NotificationBell() {
   const [events, setEvents] = useState<NotificationEvent[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const [severityFilter, setSeverityFilter] = useState<"all" | NotificationEvent["eventType"]>("all");
+  const [channelFilter, setChannelFilter] = useState<"all" | "web" | "native" | "telegram" | "recorded">("all");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Fetch notifications
@@ -90,6 +84,18 @@ export function NotificationBell() {
     setEvents((prev) => prev.map((e) => ({ ...e, acknowledged: true })));
   };
 
+  const filteredEvents = useMemo(() => {
+    return events.filter((event) => {
+      if (unreadOnly && event.acknowledged) return false;
+      if (severityFilter !== "all" && event.eventType !== severityFilter) return false;
+      if (channelFilter === "web" && !event.deliveredWeb) return false;
+      if (channelFilter === "native" && !event.deliveredNative) return false;
+      if (channelFilter === "telegram" && !event.deliveredTelegram) return false;
+      if (channelFilter === "recorded" && (event.deliveredWeb || event.deliveredNative || event.deliveredTelegram)) return false;
+      return true;
+    });
+  }, [channelFilter, events, severityFilter, unreadOnly]);
+
   return (
     <div className="relative" ref={dropdownRef}>
       {/* Bell button */}
@@ -126,17 +132,61 @@ export function NotificationBell() {
 
           {/* Events list */}
           <div className="max-h-80 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-800/40">
-            {events.length === 0 ? (
+            {events.length > 0 && (
+              <div className="px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-800/40 space-y-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    onClick={() => setUnreadOnly((value) => !value)}
+                    className={`rounded-full px-2 py-0.5 text-[10px] border transition-colors ${
+                      unreadOnly
+                        ? "border-sky-500/20 bg-sky-500/10 text-sky-500"
+                        : "border-zinc-300 dark:border-zinc-700 text-zinc-500"
+                    }`}
+                  >
+                    Unread only
+                  </button>
+                  {(["all", "quota_exhausted", "quota_critical", "quota_warning", "quota_reset", "account_switch"] as const).map((value) => (
+                    <button
+                      key={value}
+                      onClick={() => setSeverityFilter(value)}
+                      className={`rounded-full px-2 py-0.5 text-[10px] border transition-colors ${
+                        severityFilter === value
+                          ? "border-zinc-400 dark:border-zinc-500 bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200"
+                          : "border-zinc-300 dark:border-zinc-700 text-zinc-500"
+                      }`}
+                    >
+                      {value === "all" ? "All" : getNotificationUiMeta(value).label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {(["all", "web", "native", "telegram", "recorded"] as const).map((value) => (
+                    <button
+                      key={value}
+                      onClick={() => setChannelFilter(value)}
+                      className={`rounded-full px-2 py-0.5 text-[10px] border transition-colors ${
+                        channelFilter === value
+                          ? "border-zinc-400 dark:border-zinc-500 bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200"
+                          : "border-zinc-300 dark:border-zinc-700 text-zinc-500"
+                      }`}
+                    >
+                      {value === "all" ? "Any channel" : value === "recorded" ? "Recorded only" : value}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {filteredEvents.length === 0 ? (
               <div className="py-12 text-center">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor" className="h-8 w-8 text-zinc-700 mx-auto mb-2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
                 </svg>
-                <p className="text-xs text-zinc-500">No notifications yet</p>
+                <p className="text-xs text-zinc-500">{events.length === 0 ? "No notifications yet" : "No notifications match these filters"}</p>
                 <p className="text-[10px] text-zinc-600 mt-1">Alerts will appear when quota thresholds are crossed</p>
               </div>
             ) : (
-              events.map((event) => {
-                const cfg = EVENT_CONFIG[event.eventType] ?? EVENT_CONFIG.quota_warning;
+              filteredEvents.map((event) => {
+                const cfg = getNotificationUiMeta(event.eventType);
                 return (
                   <div
                     key={event.id}
@@ -164,6 +214,9 @@ export function NotificationBell() {
                           )}
                           {event.deliveredWeb && (
                             <span className="text-[9px] text-zinc-600 bg-zinc-100 dark:bg-zinc-800 rounded px-1">Web</span>
+                          )}
+                          {!event.deliveredWeb && !event.deliveredNative && !event.deliveredTelegram && (
+                            <span className="text-[9px] text-zinc-600 bg-zinc-100 dark:bg-zinc-800 rounded px-1">Recorded</span>
                           )}
                         </div>
                       </div>

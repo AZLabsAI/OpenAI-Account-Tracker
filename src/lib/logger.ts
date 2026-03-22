@@ -31,6 +31,13 @@ export interface LogEntry {
   durationMs: number | null;
 }
 
+export interface NotificationChannelHealth {
+  lastAttemptAt: string | null;
+  lastSuccessAt: string | null;
+  lastFailureAt: string | null;
+  lastError: string | null;
+}
+
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
 let _initialized = false;
@@ -170,4 +177,54 @@ export function getLogStats(): { total: number; byLevel: Record<string, number>;
     byLevel: Object.fromEntries(levelRows.map((r) => [r.level, r.n])),
     byCategory: Object.fromEntries(catRows.map((r) => [r.category, r.n])),
   };
+}
+
+function parseLogDetail(detail: string | null): Record<string, unknown> | null {
+  if (!detail) return null;
+  try {
+    return JSON.parse(detail) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+export function getNotificationChannelHealth(): Record<"web" | "native" | "telegram", NotificationChannelHealth> {
+  ensureTable();
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT timestamp, detail
+    FROM logs
+    WHERE category = 'notification'
+    ORDER BY id DESC
+    LIMIT 400
+  `).all() as Array<{ timestamp: string; detail: string | null }>;
+
+  const health: Record<"web" | "native" | "telegram", NotificationChannelHealth> = {
+    web: { lastAttemptAt: null, lastSuccessAt: null, lastFailureAt: null, lastError: null },
+    native: { lastAttemptAt: null, lastSuccessAt: null, lastFailureAt: null, lastError: null },
+    telegram: { lastAttemptAt: null, lastSuccessAt: null, lastFailureAt: null, lastError: null },
+  };
+
+  for (const row of rows) {
+    const detail = parseLogDetail(row.detail);
+    const channel = detail?.channel;
+    const outcome = detail?.outcome;
+
+    if (channel !== "web" && channel !== "native" && channel !== "telegram") continue;
+    if (outcome !== "attempt" && outcome !== "success" && outcome !== "failure") continue;
+
+    if (!health[channel].lastAttemptAt) {
+      health[channel].lastAttemptAt = row.timestamp;
+    }
+    if (outcome === "success" && !health[channel].lastSuccessAt) {
+      health[channel].lastSuccessAt = row.timestamp;
+    }
+    if (outcome === "failure" && !health[channel].lastFailureAt) {
+      health[channel].lastFailureAt = row.timestamp;
+      const error = typeof detail?.error === "string" ? detail.error : null;
+      health[channel].lastError = error;
+    }
+  }
+
+  return health;
 }

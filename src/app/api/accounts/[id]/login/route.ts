@@ -31,6 +31,7 @@ export async function POST(
     }
 
     const codexHomePath = getAccountCodexHome(id, body.codexHomePath ?? account.codexHomePath);
+    const settings = getNotificationSettings();
 
     mkdirSync(codexHomePath, { recursive: true });
     updateAccount(id, { codexHomePath });
@@ -70,7 +71,6 @@ export async function POST(
       });
 
       quotaData = await fetchQuota(codexHomePath);
-      const settings = getNotificationSettings();
       const transitions = detectTransitions(
         account,
         account.quotaData,
@@ -107,7 +107,7 @@ export async function POST(
       email: quotaData?.email,
       planType: quotaData?.planType,
       quotaData,
-      notifications: notificationEvents?.length ? notificationEvents : undefined,
+      notifications: settings.webEnabled && notificationEvents?.length ? notificationEvents : undefined,
     });
 
   } catch (err) {

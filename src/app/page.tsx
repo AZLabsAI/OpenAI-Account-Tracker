@@ -6,6 +6,8 @@ import { Account, CodexAgent, ChatGPTAgent, AccountType } from "@/types";
 import { AccountCard, AddAccountCard, NotificationBell } from "@/components";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAccountRefreshController } from "@/hooks/useAccountRefreshController";
+import { buildWebNotificationPayload, NotificationPreview } from "@/lib/notification-presentation";
+import { getQuotaStatus } from "@/lib/account-health";
 
 async function persist(id: string, patch: Partial<Account>) {
   await fetch(`/api/accounts/${id}`, {
@@ -26,12 +28,18 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: "no-quota",  label: "No Quota" },
 ];
 
+function hasUsableQuota(account: Account) {
+  if (!account.quotaData) return false;
+  return getQuotaStatus(account) !== "waiting-refresh";
+}
+
 export default function Home() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [spinLevel, setSpinLevel] = useState(0);
+  const [inUseAutoRefreshNotice, setInUseAutoRefreshNotice] = useState<Record<string, boolean>>({});
 
   // Spin decay — level drops by 1 every 2s when not clicking
   useEffect(() => {
@@ -48,23 +56,15 @@ export default function Home() {
   }, []);
 
   /** Fire a browser Web Notification for a notification event */
-  const fireWebNotification = useCallback((event: { eventType: string; message: string; id?: number }) => {
+  const fireWebNotification = useCallback((event: NotificationPreview) => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
     if (Notification.permission !== "granted") return;
 
-    const titleMap: Record<string, string> = {
-      quota_exhausted: "⛔ Quota Depleted",
-      quota_critical: "🔴 Quota Critical",
-      quota_warning: "⚠️ Quota Warning",
-      quota_reset: "✅ Quota Replenished",
-      account_switch: "🔄 Account Switched",
-    };
-    const title = titleMap[event.eventType] ?? "🔔 OpenAI Account Tracker";
-
-    const n = new Notification(title, {
-      body: event.message,
+    const payload = buildWebNotificationPayload(event);
+    const n = new Notification(payload.title, {
+      body: payload.body,
       icon: "/favicon.ico",
-      tag: `oat-${event.eventType}-${event.id ?? Date.now()}`,
+      tag: payload.tag,
       silent: false,
     });
 
@@ -165,8 +165,8 @@ export default function Home() {
     if (filter === "in-use")    result = result.filter((a) => a.inUse);
     if (filter === "starred")   result = result.filter((a) => a.starred);
     if (filter === "pinned")    result = result.filter((a) => a.pinned);
-    if (filter === "has-quota") result = result.filter((a) => a.quotaData);
-    if (filter === "no-quota")  result = result.filter((a) => !a.quotaData);
+    if (filter === "has-quota") result = result.filter(hasUsableQuota);
+    if (filter === "no-quota")  result = result.filter((a) => a.quotaData && !hasUsableQuota(a));
 
     // Search
     if (search.trim()) {
@@ -197,15 +197,32 @@ export default function Home() {
   }, []);
 
   const toggleInUse = useCallback((id: string) => {
+    const account = accounts.find((a) => a.id === id);
+    const nextInUse = account ? !account.inUse : false;
+
     setAccounts((prev) =>
       prev.map((a) => {
         if (a.id !== id) return a;
-        const updated = { ...a, inUse: !a.inUse };
-        persist(id, { inUse: updated.inUse });
+        const updated = {
+          ...a,
+          inUse: nextInUse,
+          refreshIntervalMins: nextInUse ? 5 : null,
+        };
+        persist(id, {
+          inUse: updated.inUse,
+          refreshIntervalMins: updated.refreshIntervalMins,
+        });
         return updated;
       }),
     );
-  }, []);
+
+    if (nextInUse) {
+      setInUseAutoRefreshNotice((prev) => ({ ...prev, [id]: true }));
+      setTimeout(() => {
+        setInUseAutoRefreshNotice((prev) => ({ ...prev, [id]: false }));
+      }, 2500);
+    }
+  }, [accounts]);
 
   const togglePin = useCallback((id: string) => {
     setAccounts((prev) => {
@@ -420,8 +437,8 @@ export default function Home() {
                     if (key === "in-use")    count = accounts.filter((a) => a.inUse).length;
                     if (key === "starred")   count = accounts.filter((a) => a.starred).length;
                     if (key === "pinned")    count = accounts.filter((a) => a.pinned).length;
-                    if (key === "has-quota") count = accounts.filter((a) => a.quotaData).length;
-                    if (key === "no-quota")  count = accounts.filter((a) => !a.quotaData).length;
+                    if (key === "has-quota") count = accounts.filter(hasUsableQuota).length;
+                    if (key === "no-quota")  count = accounts.filter((a) => a.quotaData && !hasUsableQuota(a)).length;
 
                     return (
                       <button
@@ -473,6 +490,7 @@ export default function Home() {
                       quotaState={quotaStates[account.id] ?? "idle"}
                       quotaError={quotaErrors[account.id] ?? null}
                       onUpdateSettings={updateSettings}
+                      showInUseAutoRefreshNotice={Boolean(inUseAutoRefreshNotice[account.id])}
                     />
                   ))}
                   <AddAccountCard onAdded={addAccount} />

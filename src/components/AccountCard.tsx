@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Account, CODEX_AGENTS, CHATGPT_AGENTS, CodexAgent, ChatGPTAgent, ACCOUNT_TYPES, AccountType } from "@/types";
 import { formatDate, daysUntilExpiration } from "@/data/accounts";
 import { getAccountStatus, getExpiryBorderUrgency } from "@/lib/account-health";
@@ -39,6 +39,7 @@ interface Props {
   quotaState: QuotaState;
   quotaError: string | null;
   onUpdateSettings: (id: string, patch: Partial<Account>) => void;
+  showInUseAutoRefreshNotice?: boolean;
 }
 
 // ─── Main component ─────────────────────────────────────────────────────────
@@ -59,11 +60,17 @@ export function AccountCard({
   quotaState,
   quotaError,
   onUpdateSettings,
+  showInUseAutoRefreshNotice = false,
 }: Props) {
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [flipped, setFlipped] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editName, setEditName] = useState(account.name);
+  const [savingName, setSavingName] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   const status = getAccountStatus(account);
   const daysLeft = daysUntilExpiration(account.expirationDate);
@@ -82,6 +89,42 @@ export function AccountCard({
   const hasCodexHome = Boolean(account.codexHomePath);
 
   const dropdownArrow = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2371717a' d='M3 4.5L6 8l3-3.5H3z'/%3E%3C/svg%3E")`;
+
+  useEffect(() => {
+    setEditName(account.name);
+    setIsEditingName(false);
+  }, [account.name]);
+
+  useEffect(() => {
+    if (isEditingName) {
+      nameInputRef.current?.focus();
+      nameInputRef.current?.select();
+    }
+  }, [isEditingName]);
+
+  const saveName = useCallback(async () => {
+    const trimmed = editName.trim();
+    if (!trimmed) {
+      setNameError("Name cannot be empty");
+      return;
+    }
+    if (trimmed === account.name) {
+      setNameError(null);
+      setIsEditingName(false);
+      return;
+    }
+
+    setSavingName(true);
+    setNameError(null);
+    try {
+      onUpdateSettings(account.id, { name: trimmed });
+      setIsEditingName(false);
+    } catch {
+      setNameError("Failed to save name");
+    } finally {
+      setSavingName(false);
+    }
+  }, [account.id, account.name, editName, onUpdateSettings]);
 
   // ── Card border style (shared by both faces) ──────────────────────────────
   // ── Avatar upload ──────────────────────────────────────────────────────────
@@ -429,6 +472,12 @@ export function AccountCard({
               </select>
             </div>
 
+            {showInUseAutoRefreshNotice && (
+              <div className="mt-4 rounded-lg border border-sky-500/15 bg-sky-500/5 px-2.5 py-1.5 text-[11px] text-sky-600 dark:text-sky-300">
+                Auto-refresh set to every 5 min
+              </div>
+            )}
+
             {/* Bottom action bar */}
             <div className="mt-4 pt-3 border-t border-zinc-200 dark:border-zinc-800/50 flex items-center justify-between gap-2">
               {/* Left: Mark In Use */}
@@ -529,9 +578,63 @@ export function AccountCard({
                     initials
                   )}
                 </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{account.name}</h3>
+                <div className="min-w-0">
+                  {isEditingName ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        ref={nameInputRef}
+                        type="text"
+                        value={editName}
+                        onChange={(e) => {
+                          setEditName(e.target.value);
+                          if (nameError) setNameError(null);
+                        }}
+                        onBlur={() => { void saveName(); }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            void saveName();
+                          }
+                          if (e.key === "Escape") {
+                            e.preventDefault();
+                            setEditName(account.name);
+                            setNameError(null);
+                            setIsEditingName(false);
+                          }
+                        }}
+                        className="w-52 max-w-full rounded-md bg-zinc-100 dark:bg-zinc-800/40 border border-zinc-300 dark:border-zinc-700/50 px-2.5 py-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100 outline-none focus:border-sky-500/50 transition-colors"
+                      />
+                      <button
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => { void saveName(); }}
+                        disabled={savingName}
+                        className="rounded-md px-2 py-1 text-[10px] font-medium bg-sky-500/10 text-sky-500 dark:text-sky-400 hover:bg-sky-500/20 border border-sky-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {savingName ? "Saving…" : "Save"}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setEditName(account.name);
+                        setNameError(null);
+                        setIsEditingName(true);
+                      }}
+                      className="group/name flex items-center gap-1 max-w-full text-left"
+                      title="Click to edit account name"
+                    >
+                      <h3 className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100 group-hover/name:text-sky-500 dark:group-hover/name:text-sky-400 transition-colors">
+                        {account.name}
+                      </h3>
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3 shrink-0 text-zinc-400 opacity-0 group-hover/name:opacity-100 transition-opacity">
+                        <path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 2.474l-7.19 7.19a1.75 1.75 0 0 1-.772.444l-2.32.664a.75.75 0 0 1-.927-.927l.664-2.32a1.75 1.75 0 0 1 .444-.772l7.19-7.19ZM12.426 4.96 11.04 3.573l-6.94 6.94a.25.25 0 0 0-.064.11l-.378 1.323 1.323-.378a.25.25 0 0 0 .11-.064l6.94-6.94Z" />
+                      </svg>
+                    </button>
+                  )}
                   <p className="text-[11px] text-zinc-500 dark:text-zinc-500">Card Settings</p>
+                  {nameError && (
+                    <p className="mt-1 text-[11px] text-red-400">{nameError}</p>
+                  )}
                 </div>
               </div>
 

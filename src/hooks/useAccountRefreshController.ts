@@ -2,8 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Account, QuotaData } from "@/types";
+import type { NotificationPreview } from "@/lib/notification-presentation";
 
-type NotificationPreview = { id: number; eventType: string; message: string };
+export function applyNotificationPreviews(
+  notifications: NotificationPreview[] | undefined,
+  fireWebNotification: (event: NotificationPreview) => void,
+) {
+  if (!notifications?.length) return;
+  for (const notification of notifications) {
+    fireWebNotification(notification);
+  }
+}
 
 export type LoginState = "idle" | "waiting" | "success" | "error";
 export type QuotaState = "idle" | "loading" | "error";
@@ -78,10 +87,7 @@ export function useAccountRefreshController({
   }, []);
 
   const applyNotifications = useCallback((notifications?: NotificationPreview[]) => {
-    if (!notifications?.length) return;
-    for (const notification of notifications) {
-      fireWebNotification(notification);
-    }
+    applyNotificationPreviews(notifications, fireWebNotification);
   }, [fireWebNotification]);
 
   const applyLocalAccountPatch = useCallback((id: string, patch: Partial<Account>) => {

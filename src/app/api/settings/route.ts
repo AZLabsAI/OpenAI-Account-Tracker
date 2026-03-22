@@ -8,16 +8,19 @@ import { getSetting, setSetting } from "@/lib/db";
 import { getNotificationSettings } from "@/lib/notify-settings";
 import { parseSettingsPatch, SettingsValidationError } from "@/lib/settings-validation";
 import { validateTelegramToken } from "@/lib/notify-telegram";
+import { getNotificationChannelHealth } from "@/lib/logger";
 
 export async function GET() {
   const settings = getNotificationSettings();
   const { getNativeCapability } = await import("@/lib/notify-native-capability");
   const nativeCap = getNativeCapability();
+  const channelHealth = getNotificationChannelHealth();
 
   return NextResponse.json({
     ...settings,
     nativeAvailable: nativeCap.available,
     nativeMethod: nativeCap.method,
+    channelHealth,
     // Include raw telegram_chat_id from DB for the form (env value is already shown via source)
     telegramChatIdFromDb: getSetting("telegram_chat_id"),
     telegramBotTokenFromDb: getSetting("telegram_bot_token") ? true : false,

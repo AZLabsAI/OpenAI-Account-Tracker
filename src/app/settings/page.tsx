@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { NotificationSettings } from "@/types";
+import type { NotificationEventType, NotificationSettings } from "@/types";
+import { buildWebNotificationPayload, getNotificationUiMeta } from "@/lib/notification-presentation";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,12 @@ interface SettingsResponse extends NotificationSettings {
   telegramEnvChatId: boolean;
   telegramChatIdFromDb: string | null;
   telegramBotTokenFromDb: boolean;
+  channelHealth: Record<"web" | "native" | "telegram", {
+    lastAttemptAt: string | null;
+    lastSuccessAt: string | null;
+    lastFailureAt: string | null;
+    lastError: string | null;
+  }>;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -63,6 +70,13 @@ const EXHAUSTED_REMINDER_OPTIONS = [
   { value: 480, label: "8h" },
   { value: 1440, label: "24h" },
 ] as const;
+const TEST_EVENT_OPTIONS: NotificationEventType[] = [
+  "quota_warning",
+  "quota_critical",
+  "quota_exhausted",
+  "quota_reset",
+  "account_switch",
+];
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
@@ -91,10 +105,23 @@ export default function SettingsPage() {
   const [settingsMsg, setSettingsMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [testingChannel, setTestingChannel] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ channel: string; success: boolean; text: string } | null>(null);
+  const [testEventType, setTestEventType] = useState<NotificationEventType>("quota_critical");
   // Active settings tab
   const [activeTab, setActiveTab] = useState<"notifications" | "logs">("notifications");
 
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const formatTimestamp = useCallback((iso?: string | null) => {
+    if (!iso) return "Never";
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return "Never";
+    return date.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }, []);
 
   // ── Fetch notification settings ────────────────────────────────────────────
   const fetchNotifSettings = useCallback(async () => {
@@ -241,7 +268,7 @@ export default function SettingsPage() {
     setTestingChannel(channel);
     setTestResult(null);
     try {
-      const res = await fetch(`/api/notifications/test?channel=${channel}`, { method: "POST" });
+      const res = await fetch(`/api/notifications/test?channel=${channel}&eventType=${testEventType}`, { method: "POST" });
       const data = await res.json() as {
         success: boolean;
         results: Record<string, { success: boolean; error?: string; title?: string; body?: string }>;
@@ -255,8 +282,12 @@ export default function SettingsPage() {
           }
           if (Notification.permission === "granted") {
             const webData = data.results.web;
-            const n = new Notification(webData?.title ?? "🔴 Quota Critical", {
-              body: webData?.body ?? "Test notification",
+            const fallback = buildWebNotificationPayload({
+              eventType: testEventType,
+              message: "Test notification",
+            });
+            const n = new Notification(webData?.title ?? fallback.title, {
+              body: webData?.body ?? fallback.body,
               icon: "/favicon.ico",
               tag: "oat-test-web",
             });
@@ -267,7 +298,7 @@ export default function SettingsPage() {
 
       const channelResult = data.results[channel];
       if (channelResult?.success || data.success) {
-        setTestResult({ channel, success: true, text: `${channel} notification sent!` });
+        setTestResult({ channel, success: true, text: `${channel} ${getNotificationUiMeta(testEventType).label.toLowerCase()} notification sent!` });
       } else {
         setTestResult({ channel, success: false, text: channelResult?.error ?? "Test failed" });
       }
@@ -410,6 +441,32 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Notification channels */}
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/50 p-6">
+                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Test Scenario</h3>
+                  <p className="text-[11px] text-zinc-500 mb-4">
+                    Choose which real notification shape to preview when testing a channel.
+                  </p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {TEST_EVENT_OPTIONS.map((value) => {
+                      const meta = getNotificationUiMeta(value);
+                      const active = testEventType === value;
+                      return (
+                        <button
+                          key={value}
+                          onClick={() => setTestEventType(value)}
+                          className={`rounded-lg px-3 py-1.5 text-[11px] font-medium border transition-colors ${
+                            active
+                              ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-zinc-900 dark:border-zinc-100"
+                              : "bg-zinc-100 dark:bg-zinc-800/40 text-zinc-500 border-zinc-300 dark:border-zinc-700/40 hover:border-zinc-400 dark:hover:border-zinc-600"
+                          }`}
+                        >
+                          {meta.emoji} {meta.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <div className="grid gap-6 md:grid-cols-3">
 
                   {/* ── Web Channel ──────────────────────────────────── */}
@@ -440,6 +497,13 @@ export default function SettingsPage() {
                           : "Not available"
                         }
                       </span>
+                    </div>
+                    <div className="space-y-1 text-[10px] text-zinc-500">
+                      <p>Last attempt: {formatTimestamp(notifSettings.channelHealth.web.lastAttemptAt)}</p>
+                      <p>Last success: {formatTimestamp(notifSettings.channelHealth.web.lastSuccessAt)}</p>
+                      {notifSettings.channelHealth.web.lastFailureAt && (
+                        <p className="text-amber-500">Last failure: {formatTimestamp(notifSettings.channelHealth.web.lastFailureAt)}</p>
+                      )}
                     </div>
                     <TestButton
                       channel="web"
@@ -473,6 +537,13 @@ export default function SettingsPage() {
                           : "Not available on this platform"
                         }
                       </span>
+                    </div>
+                    <div className="space-y-1 text-[10px] text-zinc-500">
+                      <p>Last attempt: {formatTimestamp(notifSettings.channelHealth.native.lastAttemptAt)}</p>
+                      <p>Last success: {formatTimestamp(notifSettings.channelHealth.native.lastSuccessAt)}</p>
+                      {notifSettings.channelHealth.native.lastFailureAt && (
+                        <p className="text-amber-500">Last failure: {formatTimestamp(notifSettings.channelHealth.native.lastFailureAt)}</p>
+                      )}
                     </div>
                     <TestButton
                       channel="native"
@@ -508,6 +579,16 @@ export default function SettingsPage() {
                           : "Not configured"
                         }
                       </span>
+                    </div>
+                    <div className="space-y-1 text-[10px] text-zinc-500">
+                      <p>Last attempt: {formatTimestamp(notifSettings.channelHealth.telegram.lastAttemptAt)}</p>
+                      <p>Last success: {formatTimestamp(notifSettings.channelHealth.telegram.lastSuccessAt)}</p>
+                      {notifSettings.channelHealth.telegram.lastFailureAt && (
+                        <p className="text-amber-500">
+                          Last failure: {formatTimestamp(notifSettings.channelHealth.telegram.lastFailureAt)}
+                          {notifSettings.channelHealth.telegram.lastError ? ` — ${notifSettings.channelHealth.telegram.lastError}` : ""}
+                        </p>
+                      )}
                     </div>
 
                     {/* Credentials form */}
