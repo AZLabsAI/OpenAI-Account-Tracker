@@ -3,7 +3,7 @@ import type { NotificationSettings } from "@/types";
 export const DEFAULT_THRESHOLDS = [15, 10, 5, 0] as const;
 export const DEFAULT_QUIET_HOURS_START = "22:00";
 export const DEFAULT_QUIET_HOURS_END = "07:00";
-export const DEFAULT_EXHAUSTED_REMINDER_MINS = 240;
+export const DEFAULT_EXHAUSTED_REMINDER_MINS = 0;
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 

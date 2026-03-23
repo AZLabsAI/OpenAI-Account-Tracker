@@ -118,7 +118,7 @@ function makeSettings(overrides: Partial<NotificationSettings> = {}): Notificati
     quietHoursStart: "22:00",
     quietHoursEnd: "07:00",
     defaultThresholds: [15, 10, 5, 0],
-    exhaustedReminderMins: 240,
+    exhaustedReminderMins: 0,
     ...overrides,
   };
 }
@@ -199,6 +199,15 @@ describe("notifications", () => {
       remainingPercent: 0,
       isReminder: true,
     });
+  });
+
+  it("does not emit exhausted reminders when repeat reminders are disabled", () => {
+    const account = makeAccount();
+    const quota = makeQuotaData(100, 20);
+
+    getLatestUnresolvedEvent.mockReturnValue({ id: 1, createdAt: "2026-03-19T07:00:00.000Z" });
+
+    expect(detectTransitions(account, quota, quota, [15, 10, 5, 0], 0)).toHaveLength(0);
   });
 
   it("honors delivery channel toggles", async () => {
