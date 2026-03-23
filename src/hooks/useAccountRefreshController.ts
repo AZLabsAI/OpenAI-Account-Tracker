@@ -14,6 +14,50 @@ export function applyNotificationPreviews(
   }
 }
 
+export const DEPLETED_RECOVERY_WATCH_INTERVAL_MINS = 15;
+export const DEPLETED_RECOVERY_NEAR_RESET_INTERVAL_MINS = 1;
+export const DEPLETED_RECOVERY_NEAR_RESET_THRESHOLD_MINS = 10;
+
+export function getRecoveryWatchRefreshIntervalMins(
+  account: Pick<Account, "codexHomePath" | "quotaData">,
+  now = Date.now(),
+): number | null {
+  if (!account.codexHomePath || !account.quotaData) return null;
+
+  const depletedWindows = [account.quotaData.primary, account.quotaData.secondary]
+    .filter((window): window is NonNullable<QuotaData["primary"]> => Boolean(window && window.usedPercent >= 100));
+
+  if (depletedWindows.length === 0) return null;
+
+  const minutesUntilReset = depletedWindows
+    .map((window) => {
+      if (!window.resetsAt) return null;
+      return Math.ceil((window.resetsAt * 1000 - now) / 60_000);
+    })
+    .filter((mins): mins is number => mins !== null);
+
+  if (minutesUntilReset.some((mins) => mins <= DEPLETED_RECOVERY_NEAR_RESET_THRESHOLD_MINS)) {
+    return DEPLETED_RECOVERY_NEAR_RESET_INTERVAL_MINS;
+  }
+
+  return DEPLETED_RECOVERY_WATCH_INTERVAL_MINS;
+}
+
+export function getEffectiveRefreshIntervalMins(
+  account: Pick<Account, "codexHomePath" | "quotaData" | "refreshIntervalMins">,
+  now = Date.now(),
+): number | null {
+  if (!account.codexHomePath) return null;
+
+  const intervals = [
+    account.refreshIntervalMins ?? null,
+    getRecoveryWatchRefreshIntervalMins(account, now),
+  ].filter((value): value is number => value != null && value > 0);
+
+  if (intervals.length === 0) return null;
+  return Math.min(...intervals);
+}
+
 export type LoginState = "idle" | "waiting" | "success" | "error";
 export type QuotaState = "idle" | "loading" | "error";
 
@@ -280,14 +324,15 @@ export function useAccountRefreshController({
     const interval = setInterval(() => {
       const now = Date.now();
       for (const account of accountsRef.current) {
-        if (!account.refreshIntervalMins || !account.codexHomePath) continue;
+        const refreshIntervalMins = getEffectiveRefreshIntervalMins(account, now);
+        if (!refreshIntervalMins) continue;
 
         const fetchedAt = account.quotaData?.fetchedAt
           ? new Date(account.quotaData.fetchedAt).getTime()
           : 0;
         const elapsedMins = (now - fetchedAt) / 60_000;
 
-        if (elapsedMins >= account.refreshIntervalMins) {
+        if (elapsedMins >= refreshIntervalMins) {
           void refreshAccount(account.id, "auto");
         }
       }

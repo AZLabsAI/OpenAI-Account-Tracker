@@ -772,9 +772,9 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="rounded-xl border border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/50 p-6">
-                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Depleted Reminder Interval</h3>
+                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Repeat Depleted Alerts (Optional)</h3>
                   <p className="text-[11px] text-zinc-500 mb-4">
-                    The first depleted alert fires immediately. If a quota window stays at 0% remaining, send another reminder on the next qualifying refresh after this cooldown.
+                    By default the first depleted alert fires once, then the app stays quiet and keeps checking for recovery in the background. Turn this on only if you want repeated depleted reminders too.
                   </p>
                   <div className="flex items-center gap-2 flex-wrap">
                     {EXHAUSTED_REMINDER_OPTIONS.map(({ value, label }) => {
@@ -812,11 +812,11 @@ export default function SettingsPage() {
                     </div>
                     <div className="flex gap-2">
                       <span className="text-base">🚨</span>
-                      <p>When a quota hits 0% remaining, you get an <strong>alarm-level</strong> alert with urgent sound. If it stays depleted, reminders repeat based on your selected cooldown.</p>
+                      <p>When a quota hits 0% remaining, you get one <strong>alarm-level</strong> alert. After that, the app checks depleted accounts in the background and alerts again when quota returns.</p>
                     </div>
                     <div className="flex gap-2">
                       <span className="text-base">✅</span>
-                      <p>When usage drops from ≥90% to below 50%, a reset notification fires so you know you&apos;re back at full capacity.</p>
+                      <p>When usage drops from ≥90% to below 50%, a reset notification fires so you know you&apos;re back at full capacity, even if the account was not marked as in use.</p>
                     </div>
                   </div>
                 </div>
