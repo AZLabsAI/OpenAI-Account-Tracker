@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Account, QuotaData } from "@/types";
+import { getSortedAccounts } from "@/data/accounts";
 import type { NotificationPreview } from "@/lib/notification-presentation";
 
 export function applyNotificationPreviews(
@@ -272,7 +273,7 @@ export function useAccountRefreshController({
   ]);
 
   const refreshAll = useCallback(async () => {
-    const eligible = accountsRef.current.filter((account) => account.codexHomePath);
+    const eligible = getSortedAccounts(accountsRef.current).filter((account) => account.codexHomePath);
     if (eligible.length === 0) return;
 
     setRefreshingAll(true);
