@@ -18,11 +18,12 @@ async function persist(id: string, patch: Partial<Account>) {
   });
 }
 
-type Filter = "all" | "in-use" | "starred" | "pinned" | "has-quota" | "no-quota";
+type Filter = "all" | "in-use" | "not-in-use" | "starred" | "pinned" | "has-quota" | "no-quota";
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "all",       label: "All" },
   { key: "in-use",    label: "In Use" },
+  { key: "not-in-use", label: "Not In Use" },
   { key: "starred",   label: "Starred" },
   { key: "pinned",    label: "Pinned" },
   { key: "has-quota", label: "Has Quota" },
@@ -60,10 +61,10 @@ export default function Home() {
   const [codexAgentOptions, setCodexAgentOptions] = useState<CodexAgent[]>(CODEX_AGENTS);
   const [chatgptAgentOptions, setChatgptAgentOptions] = useState<ChatGPTAgent[]>(CHATGPT_AGENTS);
 
-  // Spin decay — level drops by 1 every 2s when not clicking
+  // Spin decay — level drops by 1 every 7s when not clicking
   useEffect(() => {
     if (spinLevel === 0) return;
-    const timer = setTimeout(() => setSpinLevel((l) => Math.max(l - 1, 0)), 2000);
+    const timer = setTimeout(() => setSpinLevel((l) => Math.max(l - 1, 0)), 7000);
     return () => clearTimeout(timer);
   }, [spinLevel]);
 
@@ -180,6 +181,7 @@ export default function Home() {
 
     // Filter
     if (filter === "in-use")    result = result.filter((a) => a.inUse);
+    if (filter === "not-in-use") result = result.filter((a) => !a.inUse);
     if (filter === "starred")   result = result.filter((a) => a.starred);
     if (filter === "pinned")    result = result.filter((a) => a.pinned);
     if (filter === "has-quota") result = result.filter(hasUsableQuota);
@@ -345,11 +347,11 @@ export default function Home() {
         <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setSpinLevel((l) => Math.min(l + 1, 7))}
+              onClick={() => setSpinLevel((l) => Math.min(l + 1, 10))}
               className="flex h-9 w-9 items-center justify-center rounded-lg bg-white cursor-pointer hover:shadow-lg hover:shadow-white/10 transition-shadow"
               title="🥚"
               style={{
-                animation: `spin ${spinLevel === 0 ? 8 : Math.max(2 - spinLevel * 0.25, 0.15)}s linear infinite`,
+                animation: `spin ${spinLevel === 0 ? 8 : Math.max(1.5 - spinLevel * 0.18, 0.08)}s linear infinite`,
               }}
             >
               <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
@@ -472,6 +474,7 @@ export default function Home() {
                     // Count for each filter
                     let count = accounts.length;
                     if (key === "in-use")    count = accounts.filter((a) => a.inUse).length;
+                    if (key === "not-in-use") count = accounts.filter((a) => !a.inUse).length;
                     if (key === "starred")   count = accounts.filter((a) => a.starred).length;
                     if (key === "pinned")    count = accounts.filter((a) => a.pinned).length;
                     if (key === "has-quota") count = accounts.filter(hasUsableQuota).length;

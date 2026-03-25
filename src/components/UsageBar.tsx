@@ -44,7 +44,7 @@ interface QuotaBarProps {
 }
 
 export function QuotaBar({ quotaData }: QuotaBarProps) {
-  const { primary, secondary, planType, fetchedAt } = quotaData;
+  const { primary, secondary, fetchedAt } = quotaData;
 
   const fetchedLabel = formatFetchedAt(fetchedAt);
 
@@ -54,9 +54,6 @@ export function QuotaBar({ quotaData }: QuotaBarProps) {
       <div className="flex items-center justify-between">
         <h4 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
           Live Quota
-          {planType && (
-            <span className="ml-1.5 normal-case font-normal text-zinc-500 dark:text-zinc-600">· {planType}</span>
-          )}
         </h4>
         <span className="text-[10px] text-zinc-500 dark:text-zinc-600">{fetchedLabel}</span>
       </div>
