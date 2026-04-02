@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, type CSSProperties } from "react";
 import { getSortedAccounts } from "@/data/accounts";
 import { Account, CodexAgent, ChatGPTAgent, AccountType, CODEX_AGENTS, CHATGPT_AGENTS } from "@/types";
 import { AccountCard, AddAccountCard, NotificationBell } from "@/components";
@@ -29,6 +29,33 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: "has-quota", label: "Has Quota" },
   { key: "no-quota",  label: "No Quota" },
 ];
+
+/** Keep in sync with `package.json` version */
+const APP_VERSION = "0.0.2-beta";
+
+const SPIN_DECAY_MS = 7000;
+const SPIN_LEVEL_MAX = 10;
+const SPIN_DURATION_BASE_S = 8;
+const SPIN_DURATION_PEAK_S = 1.5;
+const SPIN_DURATION_COEFF = 0.18;
+const SPIN_DURATION_MIN_S = 0.08;
+const ACTIVE_CODEX_POLL_MS = 30_000;
+const IN_USE_NOTICE_MS = 2500;
+
+function computeFilterCounts(
+  accs: Account[],
+  hasUsable: (a: Account) => boolean,
+): Record<Filter, number> {
+  return {
+    all: accs.length,
+    "in-use": accs.filter((a) => a.inUse).length,
+    "not-in-use": accs.filter((a) => !a.inUse).length,
+    starred: accs.filter((a) => a.starred).length,
+    pinned: accs.filter((a) => a.pinned).length,
+    "has-quota": accs.filter(hasUsable).length,
+    "no-quota": accs.filter((a) => a.quotaData && !hasUsable(a)).length,
+  };
+}
 
 function hasUsableQuota(account: Account) {
   if (!account.quotaData) return false;
@@ -61,10 +88,10 @@ export default function Home() {
   const [codexAgentOptions, setCodexAgentOptions] = useState<CodexAgent[]>(CODEX_AGENTS);
   const [chatgptAgentOptions, setChatgptAgentOptions] = useState<ChatGPTAgent[]>(CHATGPT_AGENTS);
 
-  // Spin decay — level drops by 1 every 7s when not clicking
+  // Spin decay — level drops by 1 periodically when not clicking
   useEffect(() => {
     if (spinLevel === 0) return;
-    const timer = setTimeout(() => setSpinLevel((l) => Math.max(l - 1, 0)), 7000);
+    const timer = setTimeout(() => setSpinLevel((l) => Math.max(l - 1, 0)), SPIN_DECAY_MS);
     return () => clearTimeout(timer);
   }, [spinLevel]);
 
@@ -157,9 +184,9 @@ export default function Home() {
     });
   }, [syncActiveCodex]);
 
-  // Poll ~/.codex/auth.json every 30s to detect account switches
+  // Poll ~/.codex/auth.json periodically to detect account switches
   useEffect(() => {
-    const interval = setInterval(() => syncActiveCodex(), 30_000);
+    const interval = setInterval(() => syncActiveCodex(), ACTIVE_CODEX_POLL_MS);
     return () => clearInterval(interval);
   }, [syncActiveCodex]);
 
@@ -239,7 +266,7 @@ export default function Home() {
       setInUseAutoRefreshNotice((prev) => ({ ...prev, [id]: true }));
       setTimeout(() => {
         setInUseAutoRefreshNotice((prev) => ({ ...prev, [id]: false }));
-      }, 2500);
+      }, IN_USE_NOTICE_MS);
     }
   }, [accounts]);
 
@@ -340,6 +367,16 @@ export default function Home() {
   // Count signed-in accounts for the Refresh All button
   const signedInCount = accounts.filter((a) => a.codexHomePath).length;
 
+  const filterCounts = useMemo(
+    () => computeFilterCounts(accounts, hasUsableQuota),
+    [accounts],
+  );
+
+  const spinDurationS =
+    spinLevel === 0
+      ? SPIN_DURATION_BASE_S
+      : Math.max(SPIN_DURATION_PEAK_S - spinLevel * SPIN_DURATION_COEFF, SPIN_DURATION_MIN_S);
+
   return (
     <div className="min-h-screen bg-white dark:bg-transparent text-zinc-900 dark:text-zinc-100">
       {/* Header */}
@@ -347,17 +384,16 @@ export default function Home() {
         <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setSpinLevel((l) => Math.min(l + 1, 10))}
-              className="flex h-9 w-9 items-center justify-center rounded-lg bg-white cursor-pointer hover:shadow-lg hover:shadow-white/10 transition-shadow"
-              title="🥚"
-              style={{
-                animation: `spin ${spinLevel === 0 ? 8 : Math.max(1.5 - spinLevel * 0.18, 0.08)}s linear infinite`,
-              }}
+              type="button"
+              onClick={() => setSpinLevel((l) => Math.min(l + 1, SPIN_LEVEL_MAX))}
+              className="logo-easter-egg-spin flex h-9 w-9 items-center justify-center rounded-lg bg-white text-zinc-900 cursor-pointer hover:shadow-lg hover:shadow-white/10 transition-shadow"
+              title="Spin logo (easter egg)"
+              style={{ "--logo-spin-duration": `${spinDurationS}s` } as CSSProperties}
             >
               <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
                 <path
                   d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.998 5.998 0 0 0-3.998 2.9 6.042 6.042 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.677l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365 2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z"
-                  fill="#000"
+                  fill="currentColor"
                 />
               </svg>
             </button>
@@ -426,8 +462,25 @@ export default function Home() {
       <main className="mx-auto max-w-7xl px-6 py-10 space-y-10">
 
         {loading ? (
-          <div className="flex items-center justify-center py-32">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-zinc-600 dark:border-t-zinc-400" />
+          <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100/80 dark:bg-zinc-900/40 p-6 animate-pulse motion-reduce:animate-none"
+              >
+                <div className="flex gap-3 mb-4">
+                  <div className="h-11 w-11 shrink-0 rounded-full bg-zinc-200 dark:bg-zinc-800" />
+                  <div className="flex-1 space-y-2 pt-1 min-w-0">
+                    <div className="h-4 w-3/4 max-w-[200px] rounded bg-zinc-200 dark:bg-zinc-800" />
+                    <div className="h-3 w-1/2 max-w-[140px] rounded bg-zinc-200 dark:bg-zinc-800" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="h-3 rounded bg-zinc-200 dark:bg-zinc-800" />
+                  <div className="h-3 max-w-[90%] rounded bg-zinc-200 dark:bg-zinc-800" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
           <>
@@ -456,8 +509,10 @@ export default function Home() {
                     />
                     {search && (
                       <button
+                        type="button"
                         onClick={() => setSearch("")}
                         className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                        aria-label="Clear search"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3">
                           <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
@@ -468,30 +523,29 @@ export default function Home() {
                 </div>
 
                 {/* Filter pills */}
-                <div className="flex items-center gap-1.5 flex-wrap">
+                <div
+                  className="flex items-center gap-1.5 flex-wrap"
+                  role="toolbar"
+                  aria-label="Filter accounts"
+                >
                   {FILTERS.map(({ key, label }) => {
                     const active = filter === key;
-                    // Count for each filter
-                    let count = accounts.length;
-                    if (key === "in-use")    count = accounts.filter((a) => a.inUse).length;
-                    if (key === "not-in-use") count = accounts.filter((a) => !a.inUse).length;
-                    if (key === "starred")   count = accounts.filter((a) => a.starred).length;
-                    if (key === "pinned")    count = accounts.filter((a) => a.pinned).length;
-                    if (key === "has-quota") count = accounts.filter(hasUsableQuota).length;
-                    if (key === "no-quota")  count = accounts.filter((a) => a.quotaData && !hasUsableQuota(a)).length;
+                    const count = filterCounts[key];
 
                     return (
                       <button
                         key={key}
+                        type="button"
                         onClick={() => setFilter(active ? "all" : key)}
+                        aria-pressed={active}
                         className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
                           active
-                            ? "bg-zinc-100 text-zinc-900"
+                            ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
                             : "bg-zinc-100 dark:bg-zinc-800/60 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800"
                         }`}
                       >
                         {label}
-                        <span className={`ml-1.5 ${active ? "text-zinc-500" : "text-zinc-600"}`}>
+                        <span className={`ml-1.5 ${active ? "text-zinc-500 dark:text-zinc-400" : "text-zinc-600 dark:text-zinc-500"}`}>
                           {count}
                         </span>
                       </button>
@@ -500,10 +554,17 @@ export default function Home() {
                 </div>
               </div>
 
-              {filtered.length === 0 && (search || filter !== "all") ? (
+              {filtered.length === 0 && (search.trim() || filter !== "all") ? (
                 <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-800 p-16 text-center">
-                  <p className="text-zinc-500 text-sm">No accounts match your search.</p>
+                  <p className="text-zinc-500 text-sm">
+                    {search.trim() && filter !== "all"
+                      ? "No accounts match your filters and search."
+                      : search.trim()
+                        ? "No accounts match your search."
+                        : "No accounts match this filter."}
+                  </p>
                   <button
+                    type="button"
                     onClick={() => { setSearch(""); setFilter("all"); }}
                     className="mt-2 text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
                   >
@@ -552,7 +613,7 @@ export default function Home() {
       {/* Site footer */}
       <footer className="border-t border-zinc-200 dark:border-zinc-800/40 py-4 mt-8">
         <div className="mx-auto max-w-7xl px-6 flex items-center justify-between text-[11px] text-zinc-400 dark:text-zinc-600">
-          <span>v0.0.2 Beta</span>
+          <span>v{APP_VERSION}</span>
           <span className="flex items-center gap-3">
             <a
               href="https://github.com/AZLabsAI/OpenAI-Account-Tracker"

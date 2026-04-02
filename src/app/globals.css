@@ -25,6 +25,23 @@ body {
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
 }
 
+/* Logo easter-egg spin — duration set via --logo-spin-duration on the button */
+@keyframes logo-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.logo-easter-egg-spin {
+  animation: logo-spin var(--logo-spin-duration, 8s) linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-easter-egg-spin {
+    animation: none;
+  }
+}
+
 /* Subtle grid background — dark only */
 .dark body::before {
   content: "";

@@ -111,6 +111,15 @@ export default function SettingsPage() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (!confirmClear) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setConfirmClear(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [confirmClear]);
+
   const formatTimestamp = useCallback((iso?: string | null) => {
     if (!iso) return "Never";
     const date = new Date(iso);
@@ -896,19 +905,29 @@ export default function SettingsPage() {
 
               {/* Search */}
               <div className="relative">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-500 dark:text-zinc-600 pointer-events-none">
+                <label htmlFor="logs-search" className="sr-only">
+                  Search logs
+                </label>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-500 dark:text-zinc-600 pointer-events-none" aria-hidden="true">
                   <path fillRule="evenodd" d="M9.965 11.026a5 5 0 1 1 1.06-1.06l2.755 2.754a.75.75 0 1 1-1.06 1.06l-2.755-2.754ZM10.5 7a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Z" clipRule="evenodd" />
                 </svg>
                 <input
-                  type="text"
+                  id="logs-search"
+                  type="search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search logs…"
+                  aria-label="Search logs"
                   className="w-48 rounded-md bg-zinc-100 dark:bg-zinc-800/40 border border-zinc-300 dark:border-zinc-700/40 pl-7 pr-3 py-1 text-[11px] text-zinc-800 dark:text-zinc-300 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 outline-none focus:border-zinc-400 dark:focus:border-zinc-500 transition-colors"
                 />
                 {search && (
-                  <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3">
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                    aria-label="Clear log search"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3" aria-hidden="true">
                       <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
                     </svg>
                   </button>
@@ -962,20 +981,32 @@ export default function SettingsPage() {
 
       {/* Confirm clear dialog */}
       {confirmClear && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="rounded-2xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6 shadow-2xl w-full max-w-sm mx-4">
-            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Clear all logs?</h3>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setConfirmClear(false)}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="clear-logs-title"
+            className="rounded-2xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6 shadow-2xl w-full max-w-sm mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="clear-logs-title" className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Clear all logs?</h3>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-5">
               {stats?.total ?? 0} log entries will be permanently deleted.
             </p>
             <div className="flex gap-3 justify-end">
               <button
+                type="button"
                 onClick={() => setConfirmClear(false)}
                 className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleClear}
                 className="rounded-lg px-4 py-2 text-sm font-medium bg-red-500/15 text-red-500 dark:text-red-400 hover:bg-red-500/25 transition-colors"
               >
@@ -998,13 +1029,16 @@ function ToggleSwitch({ enabled, onToggle, small }: { enabled: boolean; onToggle
 
   return (
     <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
       onClick={onToggle}
-      className={`relative inline-flex ${size} items-center rounded-full transition-colors ${
+      className={`relative inline-flex shrink-0 ${size} items-center rounded-full transition-colors motion-reduce:transition-none ${
         enabled ? "bg-sky-500" : "bg-zinc-300 dark:bg-zinc-700"
       }`}
     >
       <span
-        className={`inline-block ${dotSize} rounded-full bg-white shadow-sm transition-transform ${translate}`}
+        className={`inline-block ${dotSize} rounded-full bg-white shadow-sm transition-transform motion-reduce:transition-none ${translate}`}
       />
     </button>
   );

@@ -53,8 +53,8 @@ export const accounts: Account[] = [
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-/** Sort accounts: pinned first (by pinOrder), then starred, then by name.
- *  inUse is purely a visual indicator — it does NOT affect sort position. */
+/** Sort accounts: health rank first (waiting-refresh → weekly-warning → healthy via `getSortRank`),
+ *  then pinned (by `pinOrder`), then starred, then name. `inUse` does not affect sort position. */
 export function getSortedAccounts(accs: Account[]): Account[] {
   return [...accs].sort((a, b) => {
     const aRank = getSortRank(a);

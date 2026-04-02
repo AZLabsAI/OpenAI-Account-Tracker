@@ -7,6 +7,7 @@
  */
 
 import type { UsageLimit, QuotaData } from "@/types";
+import { formatQuotaFetchedLabel } from "@/lib/format-time";
 
 // ─── Static UsageLimit bar (existing) ────────────────────────────────────────
 
@@ -24,7 +25,11 @@ export function UsageBar({ limit }: StaticProps) {
         <span className="text-zinc-600 dark:text-zinc-400 font-medium">{limit.label}</span>
         <span className={`font-mono font-semibold ${textColor}`}>{pct}%</span>
       </div>
-      <BarTrack remainingPct={pct} barColor={barColor} />
+      <BarTrack
+        remainingPct={pct}
+        barColor={barColor}
+        ariaLabel={`${limit.label} usage, ${pct}% remaining`}
+      />
       {(limit.resetsAt || limit.total !== undefined) && (
         <div className="flex items-center justify-between text-xs text-zinc-500">
           {limit.resetsAt && <span>Resets: {limit.resetsAt}</span>}
@@ -46,16 +51,16 @@ interface QuotaBarProps {
 export function QuotaBar({ quotaData }: QuotaBarProps) {
   const { primary, secondary, fetchedAt } = quotaData;
 
-  const fetchedLabel = formatFetchedAt(fetchedAt);
+  const fetchedLabel = formatQuotaFetchedLabel(fetchedAt);
 
   return (
     <div className="space-y-3">
       {/* Header row */}
       <div className="flex items-center justify-between">
-        <h4 className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
           Live Quota
         </h4>
-        <span className="text-[10px] text-zinc-500 dark:text-zinc-600">{fetchedLabel}</span>
+        <span className="text-xs text-zinc-500 dark:text-zinc-600">{fetchedLabel}</span>
       </div>
 
       {primary && (
@@ -95,13 +100,17 @@ function QuotaWindow({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between text-sm">
-        <span className="text-zinc-600 dark:text-zinc-400 font-medium text-[13px]">{label}</span>
-        <span className={`font-mono font-semibold text-[13px] ${textColor}`}>
+        <span className="text-zinc-600 dark:text-zinc-400 font-medium">{label}</span>
+        <span className={`font-mono font-semibold ${textColor}`}>
           {remainingPct}% left
         </span>
       </div>
-      <BarTrack remainingPct={remainingPct} barColor={barColor} />
-      <div className="flex items-center justify-between text-[11px] text-zinc-500">
+      <BarTrack
+        remainingPct={remainingPct}
+        barColor={barColor}
+        ariaLabel={`${label}, ${remainingPct}% remaining`}
+      />
+      <div className="flex items-center justify-between text-xs text-zinc-500">
         <span>{usedPct}% used</span>
         {resetsLabel && <span>Resets {resetsLabel}</span>}
       </div>
@@ -111,11 +120,27 @@ function QuotaWindow({
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
 
-function BarTrack({ remainingPct, barColor }: { remainingPct: number; barColor: string }) {
+function BarTrack({
+  remainingPct,
+  barColor,
+  ariaLabel,
+}: {
+  remainingPct: number;
+  barColor: string;
+  ariaLabel: string;
+}) {
+  const v = Math.round(Math.max(0, Math.min(100, remainingPct)));
   return (
-    <div className="h-2 w-full rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+    <div
+      className="h-2 w-full rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden"
+      role="progressbar"
+      aria-valuenow={v}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={ariaLabel}
+    >
       <div
-        className={`h-full rounded-full transition-all duration-500 ease-out ${barColor}`}
+        className={`h-full rounded-full transition-all duration-500 ease-out motion-reduce:transition-none ${barColor}`}
         style={{ width: `${remainingPct}%` }}
       />
     </div>
@@ -141,15 +166,4 @@ function formatResetsAt(resetsAt: number | null): string | null {
   if (diffHrs < 24) return `in ${diffHrs}h ${diffMins % 60}m`;
   const diffDays = Math.floor(diffHrs / 24);
   return `in ${diffDays}d ${diffHrs % 24}h`;
-}
-
-function formatFetchedAt(iso: string): string {
-  const d = new Date(iso);
-  const diffMs = Date.now() - d.getTime();
-  const diffMins = Math.floor(diffMs / 60_000);
-  if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHrs = Math.floor(diffMins / 60);
-  if (diffHrs < 24) return `${diffHrs}h ago`;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }

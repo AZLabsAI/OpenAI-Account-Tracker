@@ -4,6 +4,8 @@ import Image from "next/image";
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Account, CodexAgent, ChatGPTAgent, ACCOUNT_TYPES, AccountType } from "@/types";
 import { formatDate, daysUntilExpiration } from "@/data/accounts";
+import { getAccentStripClass, getAvatarAccentClass } from "@/lib/account-accent";
+import { formatLastFetchedAgo } from "@/lib/format-time";
 import { getAccountStatus, getExpiryBorderUrgency } from "@/lib/account-health";
 import type { LoginState, QuotaState } from "@/hooks/useAccountRefreshController";
 import { StatusBadge } from "./StatusBadge";
@@ -214,33 +216,52 @@ export function AccountCard({
 
   const borderClass = urgencyBorderClass ?? baseBorderClass;
 
-  // ── Accent strip ──────────────────────────────────────────────────────────
-  const accentStrip = isPinned
-    ? <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b from-violet-400 to-violet-600 rounded-l-2xl" />
-    : isStarred
-      ? <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b from-amber-400 to-amber-600 rounded-l-2xl" />
-      : isInUse
-        ? <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b from-blue-400 to-blue-600 rounded-l-2xl" />
-        : null;
+  // ── Accent strip (shared helper) ───────────────────────────────────────────
+  const accentStripClass = getAccentStripClass(account);
+  const accentStrip = accentStripClass ? <div className={accentStripClass} /> : null;
+  const avatarAccentClass = getAvatarAccentClass(account);
+
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setConfirmDelete(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [confirmDelete]);
 
   return (
     <>
       {/* Delete confirmation dialog */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="rounded-2xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl w-full max-w-sm mx-4">
-            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Delete account?</h3>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setConfirmDelete(false)}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-account-title"
+            className="rounded-2xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl w-full max-w-sm mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="delete-account-title" className="text-base font-semibold text-zinc-100 mb-1">
+              Delete account?
+            </h3>
             <p className="text-sm text-zinc-400 mb-5">
-              <span className="font-medium text-zinc-800 dark:text-zinc-200">{account.email}</span> will be permanently removed. This cannot be undone.
+              <span className="font-medium text-zinc-200">{account.email}</span> will be permanently removed. This cannot be undone.
             </p>
             <div className="flex gap-3 justify-end">
               <button
+                type="button"
                 onClick={() => setConfirmDelete(false)}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors"
+                className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={() => { setConfirmDelete(false); onDelete(account.id); }}
                 className="rounded-lg px-4 py-2 text-sm font-medium bg-red-500/15 text-red-400 hover:bg-red-500/25 transition-colors"
               >
@@ -254,7 +275,7 @@ export function AccountCard({
       {/* 3D flip container */}
       <div className="[perspective:1200px]">
         <div
-          className={`relative transition-transform duration-500 [transform-style:preserve-3d] ${
+          className={`relative transition-transform duration-500 motion-reduce:duration-0 [transform-style:preserve-3d] ${
             flipped ? "[transform:rotateY(180deg)]" : ""
           }`}
         >
@@ -279,17 +300,10 @@ export function AccountCard({
                   onChange={handleAvatarUpload}
                 />
                 <button
+                  type="button"
                   onClick={() => avatarInputRef.current?.click()}
                   className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white overflow-hidden group/avatar cursor-pointer ${
-                    !account.avatarUrl ? (
-                      isPinned
-                        ? "bg-gradient-to-br from-violet-400 to-violet-600"
-                        : isStarred
-                          ? "bg-gradient-to-br from-amber-400 to-orange-500"
-                          : isInUse
-                            ? "bg-gradient-to-br from-blue-400 to-blue-600"
-                            : "bg-gradient-to-br from-emerald-500 to-teal-600"
-                    ) : ""
+                    !account.avatarUrl ? avatarAccentClass : ""
                   }`}
                   title="Click to change avatar"
                 >
@@ -345,11 +359,12 @@ export function AccountCard({
               <div className="flex items-center gap-1.5 shrink-0">
                 {/* Pin */}
                 <button
+                  type="button"
                   onClick={() => onTogglePin(account.id)}
                   className={`rounded-md p-1 transition-colors ${
                     isPinned
                       ? "text-violet-400 hover:text-violet-300"
-                      : "text-zinc-600 hover:text-zinc-400 opacity-0 group-hover:opacity-100"
+                      : "text-zinc-600 hover:text-zinc-400 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                   }`}
                   title={isPinned ? "Unpin account" : "Pin account"}
                 >
@@ -367,11 +382,12 @@ export function AccountCard({
                 </button>
                 {/* Star */}
                 <button
+                  type="button"
                   onClick={() => onToggleStar(account.id)}
                   className={`rounded-md p-1 transition-all ${
                     isStarred
-                      ? "text-amber-400 hover:text-amber-300 drop-shadow-[0_0_6px_rgba(251,191,36,0.6)]"
-                      : "text-zinc-600 hover:text-zinc-400 opacity-0 group-hover:opacity-100"
+                      ? "text-amber-400 hover:text-amber-300"
+                      : "text-zinc-600 hover:text-zinc-400 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                   }`}
                   style={isStarred ? { filter: "drop-shadow(0 0 4px rgba(251,191,36,0.5)) drop-shadow(0 0 8px rgba(251,191,36,0.25))" } : undefined}
                   title={isStarred ? "Unstar account" : "Star account"}
@@ -416,8 +432,10 @@ export function AccountCard({
                       <span key={agent} className="inline-flex items-center gap-1 rounded-md bg-violet-500/15 border border-violet-500/25 px-1.5 py-0.5 text-[11px] font-medium text-violet-300">
                         {agent}
                         <button
+                          type="button"
                           onClick={() => onAssignCodex(account.id, (account.codexAssignedTo ?? []).filter((a) => a !== agent))}
                           className="text-violet-400 hover:text-violet-200 transition-colors leading-none"
+                          aria-label={`Remove Codex agent ${agent}`}
                         >×</button>
                       </span>
                     ))}
@@ -447,8 +465,10 @@ export function AccountCard({
                       <span key={agent} className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 border border-emerald-500/25 px-1.5 py-0.5 text-[11px] font-medium text-emerald-300">
                         {agent}
                         <button
+                          type="button"
                           onClick={() => onAssignChatGPT(account.id, (account.chatgptAssignedTo ?? []).filter((a) => a !== agent))}
                           className="text-emerald-400 hover:text-emerald-200 transition-colors leading-none"
+                          aria-label={`Remove ChatGPT agent ${agent}`}
                         >×</button>
                       </span>
                     ))}
@@ -604,15 +624,7 @@ export function AccountCard({
               <div className="flex items-center gap-2.5">
                 <div
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white overflow-hidden ${
-                    !account.avatarUrl ? (
-                      isPinned
-                        ? "bg-gradient-to-br from-violet-400 to-violet-600"
-                        : isStarred
-                          ? "bg-gradient-to-br from-amber-400 to-orange-500"
-                          : isInUse
-                            ? "bg-gradient-to-br from-blue-400 to-blue-600"
-                            : "bg-gradient-to-br from-emerald-500 to-teal-600"
-                    ) : ""
+                    !account.avatarUrl ? avatarAccentClass : ""
                   }`}
                 >
                   {account.avatarUrl ? (
@@ -763,7 +775,7 @@ export function AccountCard({
                     <div className="flex items-center gap-2 text-[12px]">
                       <span className={`inline-block h-2 w-2 rounded-full ${staleness(account.quotaData.fetchedAt) === "fresh" ? "bg-sky-400" : staleness(account.quotaData.fetchedAt) === "aging" ? "bg-amber-400" : "bg-orange-400"}`} />
                       <span className="text-zinc-600 dark:text-zinc-400">
-                        Last fetched {timeAgo(account.quotaData.fetchedAt)}
+                        Last fetched {formatLastFetchedAgo(account.quotaData.fetchedAt)}
                       </span>
                     </div>
                   )}
@@ -924,17 +936,6 @@ function staleness(fetchedAt?: string): "fresh" | "aging" | "stale" {
   if (ageMins < 30)  return "fresh";
   if (ageMins < 120) return "aging";
   return "stale";
-}
-
-function timeAgo(isoStr: string): string {
-  const ms = Date.now() - new Date(isoStr).getTime();
-  const mins = Math.floor(ms / 60_000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ${mins % 60}m ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
 }
 
 // ─── Sign In Button ───────────────────────────────────────────────────────────
