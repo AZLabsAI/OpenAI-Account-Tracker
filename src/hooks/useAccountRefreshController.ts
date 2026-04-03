@@ -76,6 +76,7 @@ type LoginResponse = {
 type QuotaResponse = QuotaData & {
   error?: string;
   notifications?: NotificationPreview[];
+  demoted?: boolean;
 };
 
 interface Options {
@@ -183,9 +184,18 @@ export function useAccountRefreshController({
           throw new Error(data.error ?? "Quota fetch failed");
         }
 
-        const { notifications, ...quotaData } = data;
+        const { notifications, demoted, ...quotaData } = data;
         const applied = applyQuotaSnapshot(id, requestId, quotaData as QuotaData);
         if (!applied) return "stale";
+
+        if (demoted) {
+          applyLocalAccountPatch(id, {
+            inUse: false,
+            pinned: false,
+            pinOrder: 0,
+            starred: false,
+          });
+        }
 
         applyNotifications(notifications);
         return "success";
@@ -206,7 +216,7 @@ export function useAccountRefreshController({
 
     inflightRefreshesRef.current.set(id, promise);
     return promise;
-  }, [applyNotifications, applyQuotaSnapshot, beginRequest, isLatestRequest]);
+  }, [applyLocalAccountPatch, applyNotifications, applyQuotaSnapshot, beginRequest, isLatestRequest]);
 
   const resetLoginStateLater = useCallback((id: string, requestId: number) => {
     const existing = loginResetTimersRef.current.get(id);

@@ -107,7 +107,10 @@ export default function SettingsPage() {
   const [testResult, setTestResult] = useState<{ channel: string; success: boolean; text: string } | null>(null);
   const [testEventType, setTestEventType] = useState<NotificationEventType>("quota_critical");
   // Active settings tab
-  const [activeTab, setActiveTab] = useState<"notifications" | "logs">("notifications");
+  const [activeTab, setActiveTab] = useState<"notifications" | "logs" | "data">("notifications");
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -380,6 +383,16 @@ export default function SettingsPage() {
               }`}
             >
               📋 Logs
+            </button>
+            <button
+              onClick={() => setActiveTab("data")}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                activeTab === "data"
+                  ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                  : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+              }`}
+            >
+              💾 Data
             </button>
           </div>
 
@@ -976,6 +989,82 @@ export default function SettingsPage() {
               )}
             </div>
           </>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            DATA TAB
+            ═══════════════════════════════════════════════════════════════════ */}
+        {activeTab === "data" && (
+          <div className="space-y-6">
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 p-6">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Export Accounts</h2>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">Download all account data as a JSON file for backup or migration.</p>
+              <a
+                href="/api/accounts/export"
+                download
+                className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-2 text-xs font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                  <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
+                  <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
+                </svg>
+                Export JSON
+              </a>
+            </div>
+
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 p-6">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Import Accounts</h2>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">Upload a previously exported JSON file to restore or merge accounts.</p>
+              <input
+                ref={importFileRef}
+                type="file"
+                accept=".json"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setImporting(true);
+                  setImportResult(null);
+                  try {
+                    const text = await file.text();
+                    const data = JSON.parse(text);
+                    const res = await fetch("/api/accounts/import", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(data),
+                    });
+                    const result = await res.json();
+                    if (res.ok) {
+                      setImportResult(`Successfully imported ${result.imported} account(s).`);
+                    } else {
+                      setImportResult(`Error: ${result.error || "Unknown error"}`);
+                    }
+                  } catch {
+                    setImportResult("Error: Invalid JSON file.");
+                  } finally {
+                    setImporting(false);
+                    if (importFileRef.current) importFileRef.current.value = "";
+                  }
+                }}
+              />
+              <button
+                onClick={() => importFileRef.current?.click()}
+                disabled={importing}
+                className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-4 py-2 text-xs font-medium hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                  <path d="M9.25 13.25a.75.75 0 0 0 1.5 0V4.636l2.955 3.129a.75.75 0 0 0 1.09-1.03l-4.25-4.5a.75.75 0 0 0-1.09 0l-4.25 4.5a.75.75 0 1 0 1.09 1.03L9.25 4.636v8.614Z" />
+                  <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
+                </svg>
+                {importing ? "Importing…" : "Import JSON"}
+              </button>
+              {importResult && (
+                <p className={`mt-3 text-xs ${importResult.startsWith("Error") ? "text-red-500" : "text-emerald-500"}`}>
+                  {importResult}
+                </p>
+              )}
+            </div>
+          </div>
         )}
       </main>
 

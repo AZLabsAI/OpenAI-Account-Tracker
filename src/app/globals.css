@@ -42,6 +42,82 @@ body {
   }
 }
 
+/* Smooth theme transitions */
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.15s ease !important;
+}
+
+/* Toast enter/exit */
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toast-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.95);
+  }
+}
+
+.animate-toast-enter {
+  animation: toast-enter 0.25s ease-out;
+}
+
+.animate-toast-exit {
+  animation: toast-exit 0.3s ease-in forwards;
+}
+
+/* Card enter animation for layout transitions */
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-card-enter {
+  animation: card-enter 0.3s ease-out;
+}
+
+/* Card exit animation (delete) */
+@keyframes card-exit {
+  to {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+
+.animate-card-exit {
+  animation: card-exit 0.25s ease-in forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-toast-enter,
+  .animate-toast-exit,
+  .animate-card-enter,
+  .animate-card-exit {
+    animation: none;
+  }
+}
+
 /* Subtle grid background — dark only */
 .dark body::before {
   content: "";

@@ -5,7 +5,7 @@ import type { Account } from "@/types";
 
 const DB_PATH = path.join(process.cwd(), "data.db");
 const SCHEMA_VERSION_KEY = "schema_version";
-const LATEST_SCHEMA_VERSION = 8;
+const LATEST_SCHEMA_VERSION = 9;
 
 let _db: Database.Database | null = null;
 
@@ -237,6 +237,22 @@ const migrations: Migration[] = [
           telegramMessageId INTEGER
         )
       `);
+    },
+  },
+  {
+    version: 9,
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS quota_history (
+          id         INTEGER PRIMARY KEY AUTOINCREMENT,
+          accountId  TEXT NOT NULL,
+          fetchedAt  TEXT NOT NULL,
+          primaryPct REAL,
+          weeklyPct  REAL,
+          UNIQUE(accountId, fetchedAt)
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_quota_history_account ON quota_history(accountId, fetchedAt)`);
     },
   },
 ];
@@ -579,4 +595,24 @@ export function clearNotificationEvents(): number {
   const db = getDb();
   const result = db.prepare("DELETE FROM notification_events").run();
   return result.changes;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Quota history helpers
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export function insertQuotaSnapshot(accountId: string, fetchedAt: string, primaryPct: number | null, weeklyPct: number | null): void {
+  const db = getDb();
+  db.prepare(`
+    INSERT OR IGNORE INTO quota_history (accountId, fetchedAt, primaryPct, weeklyPct)
+    VALUES (@accountId, @fetchedAt, @primaryPct, @weeklyPct)
+  `).run({ accountId, fetchedAt, primaryPct, weeklyPct });
+}
+
+export function getQuotaHistory(accountId: string, limit = 24): { fetchedAt: string; primaryPct: number | null; weeklyPct: number | null }[] {
+  const db = getDb();
+  return db.prepare(`
+    SELECT fetchedAt, primaryPct, weeklyPct FROM quota_history
+    WHERE accountId = @accountId ORDER BY fetchedAt DESC LIMIT @limit
+  `).all({ accountId, limit }) as { fetchedAt: string; primaryPct: number | null; weeklyPct: number | null }[];
 }

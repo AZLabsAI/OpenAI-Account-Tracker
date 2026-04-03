@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, type CSSProperties } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties } from "react";
 import { getSortedAccounts } from "@/data/accounts";
 import { Account, CodexAgent, ChatGPTAgent, AccountType, CODEX_AGENTS, CHATGPT_AGENTS } from "@/types";
 import { AccountCard, AddAccountCard, NotificationBell } from "@/components";
@@ -8,6 +8,11 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAccountRefreshController } from "@/hooks/useAccountRefreshController";
 import { buildWebNotificationPayload, NotificationPreview } from "@/lib/notification-presentation";
 import { getQuotaStatus } from "@/lib/account-health";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useLiveClock } from "@/hooks/useLiveClock";
+import { useToast } from "@/components/Toast";
+import { CommandPalette } from "@/components/CommandPalette";
+import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
 
 async function persist(id: string, patch: Partial<Account>) {
   await fetch(`/api/accounts/${id}`, {
@@ -87,6 +92,14 @@ export default function Home() {
   const [inUseAutoRefreshNotice, setInUseAutoRefreshNotice] = useState<Record<string, boolean>>({});
   const [codexAgentOptions, setCodexAgentOptions] = useState<CodexAgent[]>(CODEX_AGENTS);
   const [chatgptAgentOptions, setChatgptAgentOptions] = useState<ChatGPTAgent[]>(CHATGPT_AGENTS);
+  const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useDocumentTitle(accounts);
+  useLiveClock();
+  const { toast } = useToast();
 
   // Spin decay — level drops by 1 periodically when not clicking
   useEffect(() => {
@@ -295,10 +308,15 @@ export default function Home() {
   }, []);
 
   const deleteAccount = useCallback((id: string) => {
-    fetch(`/api/accounts/${id}`, { method: "DELETE" }).then(() => {
-      setAccounts((prev) => prev.filter((a) => a.id !== id));
-    });
-  }, []);
+    setExitingIds((prev) => new Set(prev).add(id));
+    setTimeout(() => {
+      fetch(`/api/accounts/${id}`, { method: "DELETE" }).then(() => {
+        setAccounts((prev) => prev.filter((a) => a.id !== id));
+        setExitingIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+        toast("Account deleted", "success");
+      });
+    }, 250);
+  }, [toast]);
 
   const assignCodexAgent = useCallback((id: string, agents: CodexAgent[]) => {
     setAccounts((prev) =>
@@ -363,6 +381,49 @@ export default function Home() {
     setChatgptAgentOptions(next);
     void saveAgentOptions({ chatgptOptions: next });
   }, [saveAgentOptions]);
+
+  const handleDragStart = useCallback((id: string) => setDraggedId(id), []);
+  const handleDragOver = useCallback((id: string) => setDragOverId(id), []);
+
+  const handleDrop = useCallback((targetId: string) => {
+    if (!draggedId || draggedId === targetId) {
+      setDraggedId(null);
+      setDragOverId(null);
+      return;
+    }
+    setAccounts((prev) => {
+      const pinned = prev.filter((a) => a.pinned);
+      const dragItem = pinned.find((a) => a.id === draggedId);
+      const targetItem = pinned.find((a) => a.id === targetId);
+      if (!dragItem || !targetItem) return prev;
+
+      const sortedPinned = [...pinned].sort((a, b) => (a.pinOrder ?? 0) - (b.pinOrder ?? 0));
+      const fromIdx = sortedPinned.findIndex((a) => a.id === draggedId);
+      const toIdx = sortedPinned.findIndex((a) => a.id === targetId);
+      sortedPinned.splice(fromIdx, 1);
+      sortedPinned.splice(toIdx, 0, dragItem);
+
+      const updates = new Map<string, number>();
+      sortedPinned.forEach((a, i) => updates.set(a.id, i + 1));
+
+      const next = prev.map((a) => {
+        const newOrder = updates.get(a.id);
+        if (newOrder !== undefined && newOrder !== a.pinOrder) {
+          persist(a.id, { pinOrder: newOrder });
+          return { ...a, pinOrder: newOrder };
+        }
+        return a;
+      });
+      return next;
+    });
+    setDraggedId(null);
+    setDragOverId(null);
+  }, [draggedId]);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedId(null);
+    setDragOverId(null);
+  }, []);
 
   // Count signed-in accounts for the Refresh All button
   const signedInCount = accounts.filter((a) => a.codexHomePath).length;
@@ -501,6 +562,7 @@ export default function Home() {
                       <path fillRule="evenodd" d="M9.965 11.026a5 5 0 1 1 1.06-1.06l2.755 2.754a.75.75 0 1 1-1.06 1.06l-2.755-2.754ZM10.5 7a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Z" clipRule="evenodd" />
                     </svg>
                     <input
+                      ref={searchInputRef}
                       type="text"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
@@ -545,9 +607,20 @@ export default function Home() {
                         }`}
                       >
                         {label}
-                        <span className={`ml-1.5 ${active ? "text-zinc-500 dark:text-zinc-400" : "text-zinc-600 dark:text-zinc-500"}`}>
-                          {count}
-                        </span>
+                        {key !== "all" && count > 0 && (
+                          <span className={`ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full px-1 text-[10px] font-semibold leading-none ${
+                            active
+                              ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                              : "bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
+                          }`}>
+                            {count}
+                          </span>
+                        )}
+                        {key === "all" && (
+                          <span className={`ml-1.5 ${active ? "text-zinc-500 dark:text-zinc-400" : "text-zinc-600 dark:text-zinc-500"}`}>
+                            {count}
+                          </span>
+                        )}
                       </button>
                     );
                   })}
@@ -555,7 +628,15 @@ export default function Home() {
               </div>
 
               {filtered.length === 0 && (search.trim() || filter !== "all") ? (
-                <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-800 p-16 text-center">
+                <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-800 p-16 text-center flex flex-col items-center gap-4">
+                  <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-zinc-300 dark:text-zinc-700">
+                    <rect x="8" y="14" width="48" height="36" rx="4" stroke="currentColor" strokeWidth="2" />
+                    <path d="M8 22h48" stroke="currentColor" strokeWidth="2" />
+                    <circle cx="14" cy="18" r="1.5" fill="currentColor" />
+                    <circle cx="19" cy="18" r="1.5" fill="currentColor" />
+                    <circle cx="24" cy="18" r="1.5" fill="currentColor" />
+                    <path d="M24 32h16M28 38h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
                   <p className="text-zinc-500 text-sm">
                     {search.trim() && filter !== "all"
                       ? "No accounts match your filters and search."
@@ -566,7 +647,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => { setSearch(""); setFilter("all"); }}
-                    className="mt-2 text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+                    className="mt-1 text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-600 dark:hover:text-zinc-400 transition-colors underline underline-offset-2"
                   >
                     Clear filters
                   </button>
@@ -574,29 +655,40 @@ export default function Home() {
               ) : (
                 <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
                   {filtered.map((account) => (
-                    <AccountCard
+                    <div
                       key={account.id}
-                      account={account}
-                      onToggleStar={toggleStar}
-                      onToggleInUse={toggleInUse}
-                      onTogglePin={togglePin}
-                      onDelete={deleteAccount}
-                      onAssignCodex={assignCodexAgent}
-                      onAssignChatGPT={assignChatGPTAgent}
-                      onSetAccountType={setAccountType}
-                      onSignIn={signInAccount}
-                      onRefreshQuota={refreshAccount}
-                      loginState={loginStates[account.id] ?? "idle"}
-                      loginError={loginErrors[account.id] ?? null}
-                      quotaState={quotaStates[account.id] ?? "idle"}
-                      quotaError={quotaErrors[account.id] ?? null}
-                      onUpdateSettings={updateSettings}
-                      availableCodexAgents={availableCodexAgents}
-                      availableChatGPTAgents={availableChatGPTAgents}
-                      onUpdateCodexAgentOptions={updateCodexAgentOptions}
-                      onUpdateChatGPTAgentOptions={updateChatGPTAgentOptions}
-                      showInUseAutoRefreshNotice={Boolean(inUseAutoRefreshNotice[account.id])}
-                    />
+                      className={`transition-all duration-250 ${exitingIds.has(account.id) ? "animate-card-exit" : "animate-card-enter"} ${
+                        account.pinned && draggedId ? "cursor-grab" : ""
+                      } ${dragOverId === account.id && draggedId !== account.id ? "ring-2 ring-zinc-400 dark:ring-zinc-500 rounded-2xl" : ""}`}
+                      draggable={account.pinned}
+                      onDragStart={() => handleDragStart(account.id)}
+                      onDragOver={(e) => { e.preventDefault(); handleDragOver(account.id); }}
+                      onDrop={() => handleDrop(account.id)}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <AccountCard
+                        account={account}
+                        onToggleStar={toggleStar}
+                        onToggleInUse={toggleInUse}
+                        onTogglePin={togglePin}
+                        onDelete={deleteAccount}
+                        onAssignCodex={assignCodexAgent}
+                        onAssignChatGPT={assignChatGPTAgent}
+                        onSetAccountType={setAccountType}
+                        onSignIn={signInAccount}
+                        onRefreshQuota={refreshAccount}
+                        loginState={loginStates[account.id] ?? "idle"}
+                        loginError={loginErrors[account.id] ?? null}
+                        quotaState={quotaStates[account.id] ?? "idle"}
+                        quotaError={quotaErrors[account.id] ?? null}
+                        onUpdateSettings={updateSettings}
+                        availableCodexAgents={availableCodexAgents}
+                        availableChatGPTAgents={availableChatGPTAgents}
+                        onUpdateCodexAgentOptions={updateCodexAgentOptions}
+                        onUpdateChatGPTAgentOptions={updateChatGPTAgentOptions}
+                        showInUseAutoRefreshNotice={Boolean(inUseAutoRefreshNotice[account.id])}
+                      />
+                    </div>
                   ))}
                   <AddAccountCard onAdded={addAccount} />
                 </div>
@@ -637,6 +729,16 @@ export default function Home() {
           </span>
         </div>
       </footer>
+      <CommandPalette
+        accounts={accounts}
+        onRefresh={refreshAccount}
+        onToggleStar={toggleStar}
+        onTogglePin={togglePin}
+      />
+      <KeyboardShortcuts
+        onFocusSearch={() => searchInputRef.current?.focus()}
+        onRefreshAll={() => { if (signedInCount > 0) refreshAll(); }}
+      />
     </div>
   );
 }
