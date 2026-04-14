@@ -6,7 +6,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  // Fetch a larger window so the client can bucket the data chronologically
-  const history = getQuotaHistory(id, 500);
+  // 100 rows covers 24 hourly + 14 daily buckets with margin
+  const history = getQuotaHistory(id, 100);
   return NextResponse.json(history);
 }
