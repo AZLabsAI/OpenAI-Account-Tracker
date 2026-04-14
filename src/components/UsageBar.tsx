@@ -219,7 +219,7 @@ function QuotaWindow({
               return (
                 <div
                   key={index}
-                  className={`w-1 rounded-[1px] opacity-60 ${barColor}`}
+                  className={`w-1 rounded-[1px] opacity-60 hover:opacity-100 hover:brightness-110 transition-all cursor-crosshair ${barColor}`}
                   style={{ height: `${remaining}%`, minHeight: '2px' }}
                   title={`${bucket.label}: ${Math.round(remaining)}% remaining`}
                 />
