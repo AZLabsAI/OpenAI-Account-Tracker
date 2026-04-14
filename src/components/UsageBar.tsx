@@ -151,10 +151,10 @@ function QuotaWindow({
         {history.length > 0 && (
           <div className="flex items-end h-8 gap-[2px] mb-0.5">
             {history.map((snapshot, index) => {
-              const usedPct = slot === "primary" ? snapshot.primaryPct : snapshot.weeklyPct;
-              if (usedPct == null) return null;
+              const remainingVal = slot === "primary" ? snapshot.primaryPct : snapshot.weeklyPct;
+              if (remainingVal == null) return null;
               
-              const remaining = 100 - Math.max(0, Math.min(100, usedPct));
+              const remaining = Math.max(0, Math.min(100, remainingVal));
               const { barColor } = colorFor(100 - remaining);
               
               return (
