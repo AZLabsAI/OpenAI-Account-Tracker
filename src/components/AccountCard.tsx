@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState, useCallback, useRef, useEffect } from "react";
-import { Account, CodexAgent, ChatGPTAgent, ACCOUNT_TYPES, AccountType } from "@/types";
+import { Account, CodexAgent, ChatGPTAgent, ACCOUNT_TYPES, AccountType, SUBSCRIPTION_TIERS, SubscriptionTier } from "@/types";
 import { formatDate, daysUntilExpiration } from "@/data/accounts";
 import { getAccentStripClass, getAvatarAccentClass } from "@/lib/account-accent";
 import { formatLastFetchedAgo } from "@/lib/format-time";
@@ -81,6 +81,9 @@ export function AccountCard({
   const [nameError, setNameError] = useState<string | null>(null);
   const [codexAgentInput, setCodexAgentInput] = useState("");
   const [chatgptAgentInput, setChatgptAgentInput] = useState("");
+  const [editSubscription, setEditSubscription] = useState(account.subscription);
+  const [editExpiry, setEditExpiry] = useState(account.expirationDate ?? "");
+  const [expiryError, setExpiryError] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -112,6 +115,49 @@ export function AccountCard({
     setEditName(account.name);
     setIsEditingName(false);
   }, [account.name]);
+
+  useEffect(() => {
+    setEditSubscription(account.subscription);
+  }, [account.subscription]);
+
+  useEffect(() => {
+    setEditExpiry(account.expirationDate ?? "");
+  }, [account.expirationDate]);
+
+  const requiresExpirationDate = editSubscription !== "Free";
+
+  useEffect(() => {
+    if (!requiresExpirationDate && editExpiry) {
+      setEditExpiry("");
+      setExpiryError(null);
+    }
+  }, [editExpiry, requiresExpirationDate]);
+
+  const saveSubscription = useCallback(() => {
+    if (editSubscription === account.subscription) return;
+    const normalizedExpiry = editExpiry.trim();
+    if (requiresExpirationDate && !normalizedExpiry) {
+      setExpiryError("Expiry date required for paid plans");
+      return;
+    }
+    onUpdateSettings(account.id, {
+      subscription: editSubscription,
+      ...(editSubscription === "Free" ? { expirationDate: null } : {}),
+    });
+    setExpiryError(null);
+  }, [account.id, account.subscription, editExpiry, editSubscription, onUpdateSettings, requiresExpirationDate]);
+
+  const saveExpiry = useCallback(() => {
+    const value = editExpiry.trim() || null;
+    if (value === (account.expirationDate ?? null)) return;
+    // Basic sanity check
+    if (value && isNaN(new Date(value).getTime())) {
+      setExpiryError("Invalid date");
+      return;
+    }
+    setExpiryError(null);
+    onUpdateSettings(account.id, { expirationDate: value });
+  }, [account.id, account.expirationDate, editExpiry, onUpdateSettings]);
 
   useEffect(() => {
     if (isEditingName) {
@@ -710,6 +756,93 @@ export function AccountCard({
 
             {/* Settings content */}
             <div className="flex-1 space-y-5 overflow-y-auto min-h-0">
+
+              {/* ── Subscription Settings ────────────────────────────────── */}
+              <div>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-2 block">
+                  Subscription
+                </label>
+                <p className="text-[11px] text-zinc-600 mb-3 leading-relaxed">
+                  Change the subscription tier and keep the expiry date in sync with the current plan.
+                </p>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={editSubscription}
+                    onChange={(e) => {
+                      setEditSubscription(e.target.value as SubscriptionTier);
+                      if (expiryError) setExpiryError(null);
+                    }}
+                    className="flex-1 rounded-md border border-zinc-300 dark:border-zinc-700/60 bg-zinc-100 dark:bg-zinc-800/70 px-2.5 py-1.5 text-[12px] text-zinc-800 dark:text-zinc-200 outline-none focus:border-sky-500/50 dark:focus:border-sky-500/50 transition-colors appearance-none cursor-pointer"
+                    style={{ backgroundImage: dropdownArrow, backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center", paddingRight: "24px" }}
+                  >
+                    {SUBSCRIPTION_TIERS.map((tier) => (
+                      <option key={tier} value={tier}>{tier}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={saveSubscription}
+                    disabled={editSubscription === account.subscription}
+                    className="rounded-md border border-sky-500/30 bg-sky-500/10 px-2.5 py-1.5 text-[11px] font-medium text-sky-500 dark:text-sky-400 hover:bg-sky-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    Save plan
+                  </button>
+                </div>
+                <p className="mt-2 text-[11px] text-zinc-500">
+                  Current: <span className="text-zinc-400">{account.subscription}</span>
+                </p>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-2 block">
+                  Subscription Expiry
+                </label>
+                <p className="text-[11px] text-zinc-600 mb-3 leading-relaxed">
+                  Update the expiry date after renewing your subscription.
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={editExpiry}
+                    onChange={(e) => {
+                      setEditExpiry(e.target.value);
+                      if (expiryError) setExpiryError(null);
+                    }}
+                    disabled={!requiresExpirationDate}
+                    aria-disabled={!requiresExpirationDate}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); saveExpiry(); }
+                    }}
+                    className="flex-1 rounded-md border border-zinc-300 dark:border-zinc-700/60 bg-zinc-100 dark:bg-zinc-800/70 px-2.5 py-1.5 text-[12px] text-zinc-800 dark:text-zinc-200 outline-none focus:border-sky-500/50 dark:focus:border-sky-500/50 transition-colors"
+                  />
+                  <button
+                    onClick={saveExpiry}
+                    disabled={!requiresExpirationDate || editExpiry === (account.expirationDate ?? "")}
+                    className="rounded-md border border-sky-500/30 bg-sky-500/10 px-2.5 py-1.5 text-[11px] font-medium text-sky-500 dark:text-sky-400 hover:bg-sky-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    Save date
+                  </button>
+                </div>
+                {!requiresExpirationDate && (
+                  <p className="mt-2 text-[11px] text-zinc-500">
+                    Free accounts do not require an expiry date.
+                  </p>
+                )}
+                {account.expirationDate && (
+                  <p className="mt-2 text-[11px] text-zinc-500">
+                    Current: <span className="text-zinc-400">{expiryLabel}</span>
+                    {daysLeft !== null && (
+                      <span className={`ml-1.5 font-medium ${
+                        daysLeft <= 0 ? "text-red-400" : daysLeft <= 7 ? "text-orange-400" : "text-zinc-400"
+                      }`}>
+                        ({daysLeft <= 0 ? "expired" : `${daysLeft}d left`})
+                      </span>
+                    )}
+                  </p>
+                )}
+                {expiryError && (
+                  <p className="mt-1 text-[11px] text-red-400">{expiryError}</p>
+                )}
+              </div>
 
               {/* ── Auto-refresh interval ─────────────────────────────────── */}
               <div>

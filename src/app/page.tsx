@@ -13,6 +13,7 @@ import { useLiveClock } from "@/hooks/useLiveClock";
 import { useToast } from "@/components/Toast";
 import { CommandPalette } from "@/components/CommandPalette";
 import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
+import { CodexResetHeaderStatus } from "@/components/CodexResetHeaderStatus";
 
 async function persist(id: string, patch: Partial<Account>) {
   await fetch(`/api/accounts/${id}`, {
@@ -36,7 +37,7 @@ const FILTERS: { key: Filter; label: string }[] = [
 ];
 
 /** Keep in sync with `package.json` version */
-const APP_VERSION = "0.0.2-beta";
+const APP_VERSION = "0.0.3-beta";
 
 const SPIN_DECAY_MS = 7000;
 const SPIN_LEVEL_MAX = 10;
@@ -497,6 +498,8 @@ export default function Home() {
 
             {/* Theme toggle */}
             <ThemeToggle />
+
+            <CodexResetHeaderStatus />
 
             {/* Notification bell */}
             <NotificationBell />

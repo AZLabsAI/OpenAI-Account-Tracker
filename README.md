@@ -5,7 +5,7 @@
 **A local-first dashboard for managing multiple OpenAI accounts.**\
 Track subscriptions, live usage quotas, expiration dates, and agent assignments — all from one place.
 
-[![Version](https://img.shields.io/badge/version-0.0.2--beta-blue?style=flat-square)](https://github.com/AZLabsAI/OpenAI-Account-Tracker/releases)
+[![Version](https://img.shields.io/badge/version-0.0.3--beta-blue?style=flat-square)](https://github.com/AZLabsAI/OpenAI-Account-Tracker/releases)
 [![Next.js](https://img.shields.io/badge/Next.js-16.2.0-black?style=flat-square&logo=next.js)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://typescriptlang.org)
 [![SQLite](https://img.shields.io/badge/SQLite-local--first-003B57?style=flat-square&logo=sqlite&logoColor=white)](https://sqlite.org)
@@ -83,6 +83,8 @@ Open **http://localhost:3000** — that's it.\
 Three example accounts are seeded on first run. Add your own or delete the examples.
 
 Use `pnpm lint`, `pnpm typecheck`, and `pnpm test` before pushing changes.
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 <br />
 
@@ -163,6 +165,13 @@ This dashboard is intended for **trusted environments**. Do not expose the API t
 
 <br />
 
+## Release Notes
+
+### 0.0.3-beta
+- Fixes Codex account-home disk bloat caused by leaked plugin clone temp directories.
+- Moves app-server sessions to temporary scratch `CODEX_HOME` directories while keeping account auth persistent.
+- Disables unnecessary plugin startup for login/quota sessions.
+
 ## Roadmap
 
 - [ ] Export/import accounts (JSON backup)
@@ -197,7 +206,7 @@ MIT — see [LICENSE](LICENSE) for details.
 
 ---
 
-**v0.0.2 Beta** · Made with care by [AZ Labs](https://azlabs.co.za)
+**v0.0.3 Beta** · Made with care by [AZ Labs](https://azlabs.co.za)
 
 <sub>If this is useful, consider giving it a star</sub>
 

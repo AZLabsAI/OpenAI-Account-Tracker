@@ -6,14 +6,18 @@
  * AccountStatus – derived health indicator shown in the UI.
  */
 
-export type SubscriptionTier =
-  | "Free"
-  | "ChatGPT Plus"
-  | "ChatGPT Pro"
-  | "ChatGPT Team"
-  | "ChatGPT Enterprise"
-  | "API Pay-As-You-Go"
-  | "API Scale";
+export const SUBSCRIPTION_TIERS = [
+  "ChatGPT Go",
+  "ChatGPT Plus",
+  "ChatGPT Pro",
+  "ChatGPT Team",
+  "ChatGPT Enterprise",
+  "Free",
+  "API Pay-As-You-Go",
+  "API Scale",
+] as const;
+
+export type SubscriptionTier = typeof SUBSCRIPTION_TIERS[number];
 
 export type QuotaStatus = "normal" | "weekly-warning" | "waiting-refresh";
 
@@ -47,13 +51,14 @@ export const CHATGPT_AGENTS: ChatGPTAgent[] = [
   "ChatGPT on Work-PC",
 ];
 
-export type AccountType = "Primary account" | "Personal account" | "Work account" | "Business account";
+export type AccountType = "Primary account" | "Personal account" | "Work account" | "Business account" | "1 Month Plus Gift";
 
 export const ACCOUNT_TYPES: AccountType[] = [
   "Primary account",
   "Personal account",
   "Work account",
   "Business account",
+  "1 Month Plus Gift",
 ];
 
 export interface UsageLimit {
@@ -100,8 +105,10 @@ export interface Account {
   /** Ascending integer — lower = higher in the pinned list */
   pinOrder?: number;
   /**
-   * Absolute path to the CODEX_HOME directory for this account.
-   * When set, quota can be fetched live via `codex app-server`.
+   * Absolute path to the persistent auth home for this account.
+   * The app copies `auth.json` out of this directory into a temporary runtime
+   * CODEX_HOME for each `codex app-server` session so transient Codex caches,
+   * logs, skills, and plugin sync artifacts do not accumulate here.
    * Example: "/Users/you/.codex-accounts/acc_001"
    */
   codexHomePath?: string;

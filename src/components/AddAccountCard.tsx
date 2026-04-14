@@ -10,17 +10,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { Account, ACCOUNT_TYPES, AccountType, SubscriptionTier } from "@/types";
-
-const SUBSCRIPTION_TIERS: SubscriptionTier[] = [
-  "ChatGPT Plus",
-  "ChatGPT Pro",
-  "ChatGPT Team",
-  "ChatGPT Enterprise",
-  "Free",
-  "API Pay-As-You-Go",
-  "API Scale",
-];
+import { Account, ACCOUNT_TYPES, AccountType, SUBSCRIPTION_TIERS, SubscriptionTier } from "@/types";
 
 interface Props {
   onAdded: (account: Account) => void;

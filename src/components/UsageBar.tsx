@@ -23,7 +23,7 @@ export function UsageBar({ limit }: StaticProps) {
     <div className="space-y-1.5">
       <div className="flex items-center justify-between text-sm">
         <span className="text-zinc-600 dark:text-zinc-400 font-medium">{limit.label}</span>
-        <span className={`font-mono font-semibold ${textColor}`}>{pct}%</span>
+        <span className={`tabular-nums font-semibold ${textColor}`}>{pct}%</span>
       </div>
       <BarTrack
         remainingPct={pct}
@@ -54,24 +54,24 @@ export function QuotaBar({ quotaData }: QuotaBarProps) {
   const fetchedLabel = formatQuotaFetchedLabel(fetchedAt);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       {/* Header row */}
       <div className="flex items-center justify-between">
         <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
-          Live Quota
+          Live Balance
         </h4>
         <span className="text-xs text-zinc-500 dark:text-zinc-600">{fetchedLabel}</span>
       </div>
 
       {primary && (
         <QuotaWindow
-          label="5-hour window"
+          label={quotaLabelFor(primary, "primary")}
           window={primary}
         />
       )}
       {secondary && (
         <QuotaWindow
-          label="Weekly window"
+          label={quotaLabelFor(secondary, "secondary")}
           window={secondary}
         />
       )}
@@ -91,29 +91,35 @@ function QuotaWindow({
   label: string;
   window: NonNullable<QuotaData["primary"]>;
 }) {
-  const usedPct = Math.max(0, Math.min(100, w.usedPercent));
-  const remainingPct = 100 - usedPct;
-  const { barColor, textColor } = colorFor(usedPct);
-
-  const resetsLabel = formatResetsAt(w.resetsAt);
+  const remainingPct = 100 - Math.max(0, Math.min(100, w.usedPercent));
+  const resetsLabel = formatBalanceResetLabel(w.resetsAt);
 
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-zinc-600 dark:text-zinc-400 font-medium">{label}</span>
-        <span className={`font-mono font-semibold ${textColor}`}>
-          {remainingPct}% left
-        </span>
+    <div className="space-y-1">
+      <div className="space-y-0.5">
+        <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-500">
+          {label}
+        </p>
+        <p className="leading-none text-zinc-900 dark:text-zinc-50">
+          <span className="tabular-nums text-[1.45rem] font-semibold tracking-[-0.03em]">
+            {remainingPct}%
+          </span>
+          {" "}
+          <span className="ml-1.5 text-[0.95rem] font-medium text-zinc-700 dark:text-zinc-200">
+            remaining
+          </span>
+        </p>
       </div>
       <BarTrack
         remainingPct={remainingPct}
-        barColor={barColor}
+        barColor="bg-emerald-500 dark:bg-emerald-400"
+        trackColor="bg-zinc-200 dark:bg-zinc-200/90"
+        heightClassName="h-3"
         ariaLabel={`${label}, ${remainingPct}% remaining`}
       />
-      <div className="flex items-center justify-between text-xs text-zinc-500">
-        <span>{usedPct}% used</span>
-        {resetsLabel && <span>Resets {resetsLabel}</span>}
-      </div>
+      <p className="text-[11px] text-zinc-500 dark:text-zinc-500">
+        {resetsLabel ? `Resets ${resetsLabel}` : "Reset time unavailable"}
+      </p>
     </div>
   );
 }
@@ -123,16 +129,20 @@ function QuotaWindow({
 function BarTrack({
   remainingPct,
   barColor,
+  trackColor = "bg-zinc-200 dark:bg-zinc-800",
+  heightClassName = "h-2",
   ariaLabel,
 }: {
   remainingPct: number;
   barColor: string;
+  trackColor?: string;
+  heightClassName?: string;
   ariaLabel: string;
 }) {
   const v = Math.round(Math.max(0, Math.min(100, remainingPct)));
   return (
     <div
-      className="h-2 w-full rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden"
+      className={`${heightClassName} w-full rounded-full overflow-hidden ${trackColor}`}
       role="progressbar"
       aria-valuenow={v}
       aria-valuemin={0}
@@ -153,17 +163,106 @@ function colorFor(usedPct: number): { barColor: string; textColor: string } {
   return               { barColor: "bg-emerald-500", textColor: "text-emerald-400" };
 }
 
-function formatResetsAt(resetsAt: number | null): string | null {
-  if (!resetsAt) return null;
-  const d = new Date(resetsAt * 1000);
-  const now = new Date();
-  const diffMs = d.getTime() - now.getTime();
-  if (diffMs <= 0) return "soon";
+function quotaLabelFor(window: NonNullable<QuotaData["primary"]>, slot: "primary" | "secondary"): string {
+  const duration = window.windowDurationSecs;
+  if (duration != null) {
+    if (Math.abs(duration - 18_000) <= 60) return "5 hour usage limit";
+    if (Math.abs(duration - 604_800) <= 60) return "Weekly usage limit";
+  }
+  return slot === "primary" ? "5 hour usage limit" : "Weekly usage limit";
+}
 
-  const diffMins = Math.floor(diffMs / 60_000);
-  if (diffMins < 60) return `in ${diffMins}m`;
-  const diffHrs = Math.floor(diffMins / 60);
-  if (diffHrs < 24) return `in ${diffHrs}h ${diffMins % 60}m`;
-  const diffDays = Math.floor(diffHrs / 24);
-  return `in ${diffDays}d ${diffHrs % 24}h`;
+function formatBalanceResetLabel(resetsAt: number | null): string | null {
+  if (!resetsAt) return null;
+
+  const timeZone = "Africa/Johannesburg";
+  const resetDate = new Date(resetsAt * 1000);
+  const now = new Date();
+  const resetParts = getDateTimeParts(resetDate, timeZone);
+  const nowParts = getDateTimeParts(now, timeZone);
+  const daysUntil = Math.max(0, differenceInCalendarDays(nowParts, resetParts));
+  const timePart = `${resetParts.hour}:${resetParts.minute} ${resetParts.dayPeriod}`;
+  const datePart = `${resetParts.weekday}, ${resetParts.month} ${resetParts.day} · ${timePart}`;
+  const dayPart = dayPartForHour(resetParts.hour24);
+
+  if (daysUntil === 0) {
+    if (dayPart === "tonight") {
+      return `tonight at ${timePart}`;
+    }
+
+    return `this ${dayPart} at ${timePart}`;
+  }
+
+  if (daysUntil === 1) {
+    if (dayPart === "tonight") {
+      return `tomorrow night on ${datePart}`;
+    }
+
+    return `tomorrow ${dayPart} on ${datePart}`;
+  }
+
+  return `in ${daysUntil} day${daysUntil === 1 ? "" : "s"} on ${datePart}`;
+}
+
+function getDateTimeParts(date: Date, timeZone: string) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  const parts = formatter.formatToParts(date);
+  const year = Number(parts.find((part) => part.type === "year")?.value);
+  const month = parts.find((part) => part.type === "month")?.value ?? "";
+  const day = Number(parts.find((part) => part.type === "day")?.value);
+  const weekday = parts.find((part) => part.type === "weekday")?.value ?? "";
+  const hour12 = parts.find((part) => part.type === "hour")?.value ?? "";
+  const minute = parts.find((part) => part.type === "minute")?.value ?? "";
+  const dayPeriod = parts.find((part) => part.type === "dayPeriod")?.value ?? "";
+  const hour24 = Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hour: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(date)
+      .find((part) => part.type === "hour")?.value,
+  );
+
+  return {
+    year,
+    month,
+    day,
+    weekday,
+    hour: hour12,
+    minute,
+    dayPeriod,
+    hour24,
+  };
+}
+
+function differenceInCalendarDays(
+  current: { year: number; month: string; day: number },
+  target: { year: number; month: string; day: number },
+) {
+  const monthIndex = (month: string) => {
+    const date = new Date(`${month} 1, 2000`);
+    return date.getMonth();
+  };
+
+  const currentIndex = Date.UTC(current.year, monthIndex(current.month), current.day);
+  const targetIndex = Date.UTC(target.year, monthIndex(target.month), target.day);
+  return Math.round((targetIndex - currentIndex) / 86_400_000);
+}
+
+function dayPartForHour(hour24: number) {
+  if (hour24 >= 5 && hour24 <= 11) return "morning";
+  if (hour24 >= 12 && hour24 <= 16) return "afternoon";
+  if (hour24 >= 17 && hour24 <= 20) return "evening";
+  return "tonight";
 }
