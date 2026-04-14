@@ -564,7 +564,7 @@ export function AccountCard({
             {account.quotaData && (
               <>
                 <div className="my-4 h-px bg-zinc-200 dark:bg-zinc-800/80" />
-                <QuotaBar quotaData={account.quotaData} />
+                <QuotaBar quotaData={account.quotaData} accountId={account.id} />
               </>
             )}
 

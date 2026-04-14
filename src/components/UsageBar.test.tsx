@@ -4,7 +4,7 @@ import type { QuotaData } from "@/types";
 import { QuotaBar } from "./UsageBar";
 
 function renderQuotaBar(quotaData: QuotaData): string {
-  return renderToStaticMarkup(<QuotaBar quotaData={quotaData} />);
+  return renderToStaticMarkup(<QuotaBar quotaData={quotaData} accountId="test_123" />);
 }
 
 function makeQuotaData(overrides: Partial<QuotaData> = {}): QuotaData {

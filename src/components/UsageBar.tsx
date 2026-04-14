@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * UsageBar — renders a single quota window as a labelled progress bar.
  *
@@ -6,6 +8,7 @@
  *   - A live `QuotaWindow` from the Codex app-server
  */
 
+import { useEffect, useState } from "react";
 import type { UsageLimit, QuotaData } from "@/types";
 import { formatQuotaFetchedLabel } from "@/lib/format-time";
 
@@ -46,10 +49,34 @@ export function UsageBar({ limit }: StaticProps) {
 
 interface QuotaBarProps {
   quotaData: QuotaData;
+  accountId: string;
 }
 
-export function QuotaBar({ quotaData }: QuotaBarProps) {
+interface QuotaHistoryItem {
+  fetchedAt: string;
+  primaryPct: number | null;
+  weeklyPct: number | null;
+}
+
+export function QuotaBar({ quotaData, accountId }: QuotaBarProps) {
   const { primary, secondary, fetchedAt } = quotaData;
+  const [history, setHistory] = useState<QuotaHistoryItem[]>([]);
+
+  useEffect(() => {
+    async function fetchHistory() {
+      try {
+        const res = await fetch(`/api/accounts/${accountId}/history`);
+        if (res.ok) {
+          const data = await res.json();
+          // Data is returned newest first, we want oldest first (left to right) for the sparkline
+          setHistory(Array.isArray(data) ? data.reverse() : []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch quota history", err);
+      }
+    }
+    fetchHistory();
+  }, [accountId, fetchedAt]);
 
   const fetchedLabel = formatQuotaFetchedLabel(fetchedAt);
 
@@ -65,14 +92,18 @@ export function QuotaBar({ quotaData }: QuotaBarProps) {
 
       {primary && (
         <QuotaWindow
+          slot="primary"
           label={quotaLabelFor(primary, "primary")}
           window={primary}
+          history={history}
         />
       )}
       {secondary && (
         <QuotaWindow
+          slot="secondary"
           label={quotaLabelFor(secondary, "secondary")}
           window={secondary}
+          history={history}
         />
       )}
       {!primary && !secondary && (
@@ -85,31 +116,60 @@ export function QuotaBar({ quotaData }: QuotaBarProps) {
 // ─── Individual window bar ────────────────────────────────────────────────────
 
 function QuotaWindow({
+  slot,
   label,
   window: w,
+  history,
 }: {
+  slot: "primary" | "secondary";
   label: string;
   window: NonNullable<QuotaData["primary"]>;
+  history: QuotaHistoryItem[];
 }) {
   const remainingPct = 100 - Math.max(0, Math.min(100, w.usedPercent));
   const resetsLabel = formatBalanceResetLabel(w.resetsAt);
 
   return (
     <div className="space-y-1">
-      <div className="space-y-0.5">
-        <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-500">
-          {label}
-        </p>
-        <p className="leading-none text-zinc-900 dark:text-zinc-50">
-          <span className="tabular-nums text-[1.45rem] font-semibold tracking-[-0.03em]">
-            {remainingPct}%
-          </span>
-          {" "}
-          <span className="ml-1.5 text-[0.95rem] font-medium text-zinc-700 dark:text-zinc-200">
-            remaining
-          </span>
-        </p>
+      <div className="flex items-end justify-between">
+        <div className="space-y-0.5">
+          <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-500">
+            {label}
+          </p>
+          <p className="leading-none text-zinc-900 dark:text-zinc-50">
+            <span className="tabular-nums text-[1.45rem] font-semibold tracking-[-0.03em]">
+              {remainingPct}%
+            </span>
+            {" "}
+            <span className="ml-1.5 text-[0.95rem] font-medium text-zinc-700 dark:text-zinc-200">
+              remaining
+            </span>
+          </p>
+        </div>
+
+        {/* Sparkline History */}
+        {history.length > 0 && (
+          <div className="flex items-end h-8 gap-[2px] mb-0.5">
+            {history.map((snapshot, index) => {
+              const usedPct = slot === "primary" ? snapshot.primaryPct : snapshot.weeklyPct;
+              if (usedPct == null) return null;
+              
+              const remaining = 100 - Math.max(0, Math.min(100, usedPct));
+              const { barColor } = colorFor(100 - remaining);
+              
+              return (
+                <div
+                  key={index}
+                  className={`w-1 rounded-[1px] opacity-60 ${barColor}`}
+                  style={{ height: `${remaining}%`, minHeight: '2px' }}
+                  title={`Fetched: ${new Date(snapshot.fetchedAt).toLocaleString()}`}
+                />
+              );
+            })}
+          </div>
+        )}
       </div>
+
       <BarTrack
         remainingPct={remainingPct}
         barColor="bg-emerald-500 dark:bg-emerald-400"
