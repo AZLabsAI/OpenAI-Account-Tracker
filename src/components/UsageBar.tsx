@@ -68,8 +68,8 @@ export function QuotaBar({ quotaData, accountId }: QuotaBarProps) {
         const res = await fetch(`/api/accounts/${accountId}/history`);
         if (res.ok) {
           const data = await res.json();
-          // Data is returned newest first, we want oldest first (left to right) for the sparkline
-          setHistory(Array.isArray(data) ? data.reverse() : []);
+          // Data is returned newest first. We keep it that way for the bucketing logic
+          setHistory(Array.isArray(data) ? data : []);
         }
       } catch (err) {
         console.error("Failed to fetch quota history", err);
@@ -79,6 +79,56 @@ export function QuotaBar({ quotaData, accountId }: QuotaBarProps) {
   }, [accountId, fetchedAt]);
 
   const fetchedLabel = formatQuotaFetchedLabel(fetchedAt);
+
+  // Group historical snapshots into buckets
+  // For the 5-hour quota, we want 24 hourly buckets.
+  // For the weekly quota, we want 14 daily buckets.
+  const now = new Date();
+  
+  // Primary (Hourly) Buckets
+  const primaryBuckets: { label: string; remaining: number | null }[] = Array.from({ length: 24 }).map((_, i) => {
+    const bucketStart = new Date(now.getTime() - i * 3600000);
+    const bucketEnd = new Date(now.getTime() - (i - 1) * 3600000);
+    
+    // Find the latest snapshot in this bucket that has a primaryPct
+    const snapshotInBucket = history.find(s => {
+      if (s.primaryPct == null) return false;
+      const t = new Date(s.fetchedAt).getTime();
+      return t <= bucketEnd.getTime() && t > bucketStart.getTime();
+    });
+
+    const hour = bucketStart.getHours();
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+
+    return {
+      label: `${hour12}:00 ${ampm}`,
+      remaining: snapshotInBucket ? snapshotInBucket.primaryPct : null,
+    };
+  }).reverse(); // Reverse so oldest is left, newest is right
+
+  // Secondary (Daily) Buckets
+  const secondaryBuckets: { label: string; remaining: number | null }[] = Array.from({ length: 14 }).map((_, i) => {
+    const bucketStart = new Date(now.getTime() - i * 86400000);
+    // Align to start of day for cleaner boundaries (optional, but good for daily)
+    bucketStart.setHours(0, 0, 0, 0);
+    const bucketEnd = new Date(bucketStart.getTime() + 86400000);
+    
+    // Find the latest snapshot in this bucket that has a weeklyPct
+    const snapshotInBucket = history.find(s => {
+      if (s.weeklyPct == null) return false;
+      const t = new Date(s.fetchedAt).getTime();
+      return t < bucketEnd.getTime() && t >= bucketStart.getTime();
+    });
+
+    const month = bucketStart.toLocaleString('default', { month: 'short' });
+    const day = bucketStart.getDate();
+
+    return {
+      label: `${month} ${day}`,
+      remaining: snapshotInBucket ? snapshotInBucket.weeklyPct : null,
+    };
+  }).reverse();
 
   return (
     <div className="space-y-2.5">
@@ -95,7 +145,7 @@ export function QuotaBar({ quotaData, accountId }: QuotaBarProps) {
           slot="primary"
           label={quotaLabelFor(primary, "primary")}
           window={primary}
-          history={history}
+          buckets={primaryBuckets}
         />
       )}
       {secondary && (
@@ -103,7 +153,7 @@ export function QuotaBar({ quotaData, accountId }: QuotaBarProps) {
           slot="secondary"
           label={quotaLabelFor(secondary, "secondary")}
           window={secondary}
-          history={history}
+          buckets={secondaryBuckets}
         />
       )}
       {!primary && !secondary && (
@@ -119,12 +169,12 @@ function QuotaWindow({
   slot,
   label,
   window: w,
-  history,
+  buckets,
 }: {
   slot: "primary" | "secondary";
   label: string;
   window: NonNullable<QuotaData["primary"]>;
-  history: QuotaHistoryItem[];
+  buckets: { label: string; remaining: number | null }[];
 }) {
   const remainingPct = 100 - Math.max(0, Math.min(100, w.usedPercent));
   const resetsLabel = formatBalanceResetLabel(w.resetsAt);
@@ -148,13 +198,22 @@ function QuotaWindow({
         </div>
 
         {/* Sparkline History */}
-        {history.length > 0 && (
-          <div className="flex items-end h-8 gap-[2px] mb-0.5">
-            {history.map((snapshot, index) => {
-              const remainingVal = slot === "primary" ? snapshot.primaryPct : snapshot.weeklyPct;
-              if (remainingVal == null) return null;
+        {buckets.length > 0 && (
+          <div className="flex items-end h-8 gap-[2px] mb-0.5" title={`${slot === 'primary' ? 'Last 24 Hours' : 'Last 14 Days'} Trend`}>
+            {buckets.map((bucket, index) => {
+              if (bucket.remaining == null) {
+                // Render an empty placeholder for buckets with no data
+                return (
+                  <div
+                    key={index}
+                    className="w-1 rounded-[1px] bg-zinc-200/50 dark:bg-zinc-800/50"
+                    style={{ height: '2px' }}
+                    title={`${bucket.label}: No data`}
+                  />
+                );
+              }
               
-              const remaining = Math.max(0, Math.min(100, remainingVal));
+              const remaining = Math.max(0, Math.min(100, bucket.remaining));
               const { barColor } = colorFor(100 - remaining);
               
               return (
@@ -162,7 +221,7 @@ function QuotaWindow({
                   key={index}
                   className={`w-1 rounded-[1px] opacity-60 ${barColor}`}
                   style={{ height: `${remaining}%`, minHeight: '2px' }}
-                  title={`Fetched: ${new Date(snapshot.fetchedAt).toLocaleString()}`}
+                  title={`${bucket.label}: ${Math.round(remaining)}% remaining`}
                 />
               );
             })}

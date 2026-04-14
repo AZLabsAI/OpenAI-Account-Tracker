@@ -6,6 +6,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const history = getQuotaHistory(id, 24);
+  // Fetch a larger window so the client can bucket the data chronologically
+  const history = getQuotaHistory(id, 500);
   return NextResponse.json(history);
 }
