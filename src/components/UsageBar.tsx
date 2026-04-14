@@ -2,19 +2,15 @@
 
 /**
  * UsageBar — renders a single quota window as a labelled progress bar
- * with a compact sparkline showing quota history.
+ * with a configurable sparkline showing quota history.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { UsageLimit, QuotaData } from "@/types";
+import { useEffect, useMemo, useState } from "react";
+import type { UsageLimit, QuotaData, SparklineStyle } from "@/types";
 import { formatQuotaFetchedLabel } from "@/lib/format-time";
+import { Sparkline, type Bucket } from "./Sparkline";
 
-// ─── Types & constants ────────────────────────────────────────────────────────
-
-interface Bucket {
-  label: string;
-  remaining: number | null;
-}
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface QuotaHistoryItem {
   fetchedAt: string;
@@ -57,7 +53,11 @@ export function UsageBar({ limit }: { limit: UsageLimit }) {
 
 // ─── Live QuotaBar ───────────────────────────────────────────────────────────
 
-export function QuotaBar({ quotaData, accountId }: { quotaData: QuotaData; accountId: string }) {
+export function QuotaBar({ quotaData, accountId, sparklineStyle }: {
+  quotaData: QuotaData;
+  accountId: string;
+  sparklineStyle?: SparklineStyle;
+}) {
   const { primary, secondary, fetchedAt } = quotaData;
   const [history, setHistory] = useState<QuotaHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,11 +86,13 @@ export function QuotaBar({ quotaData, accountId }: { quotaData: QuotaData; accou
       </div>
       {primary && (
         <QuotaWindow slot="primary" label={quotaLabelFor(primary, "primary")}
-          window={primary} buckets={pBuckets} loading={loading} accountId={accountId} />
+          window={primary} buckets={pBuckets} loading={loading}
+          accountId={accountId} sparklineStyle={sparklineStyle} />
       )}
       {secondary && (
         <QuotaWindow slot="secondary" label={quotaLabelFor(secondary, "secondary")}
-          window={secondary} buckets={sBuckets} loading={loading} accountId={accountId} />
+          window={secondary} buckets={sBuckets} loading={loading}
+          accountId={accountId} sparklineStyle={sparklineStyle} />
       )}
       {!primary && !secondary && <p className="text-xs text-zinc-500 italic">No quota data available</p>}
     </div>
@@ -99,13 +101,14 @@ export function QuotaBar({ quotaData, accountId }: { quotaData: QuotaData; accou
 
 // ─── QuotaWindow ─────────────────────────────────────────────────────────────
 
-function QuotaWindow({ slot, label, window: w, buckets, loading, accountId }: {
+function QuotaWindow({ slot, label, window: w, buckets, loading, accountId, sparklineStyle }: {
   slot: "primary" | "secondary";
   label: string;
   window: NonNullable<QuotaData["primary"]>;
   buckets: Bucket[];
   loading: boolean;
   accountId: string;
+  sparklineStyle?: SparklineStyle;
 }) {
   const pct = 100 - Math.max(0, Math.min(100, w.usedPercent));
   const trend = useMemo(() => getTrend(buckets), [buckets]);
@@ -132,123 +135,18 @@ function QuotaWindow({ slot, label, window: w, buckets, loading, accountId }: {
         ariaLabel={`${label}, ${pct}% remaining`} />
 
       {loading
-        ? <div className="h-7 w-full rounded bg-zinc-100 dark:bg-zinc-800/30 animate-pulse mt-1" />
-        : filled >= 2 && <Sparkline buckets={buckets} pct={pct} id={`sp-${accountId}-${slot}`} />
+        ? <div className="h-9 w-full rounded bg-zinc-100 dark:bg-zinc-800/30 animate-pulse mt-1" />
+        : filled >= 2 && (
+          <Sparkline
+            style={sparklineStyle}
+            buckets={buckets}
+            remainingPct={pct}
+            gradientId={`sp-${accountId}-${slot}`}
+          />
+        )
       }
 
       <p className="text-[11px] text-zinc-500">{resetsLabel ? `Resets ${resetsLabel}` : "Reset time unavailable"}</p>
-    </div>
-  );
-}
-
-// ─── Sparkline (compact SVG polyline + area fill) ────────────────────────────
-
-function Sparkline({ buckets, pct, id }: { buckets: Bucket[]; pct: number; id: string }) {
-  const [hovered, setHovered] = useState<number | null>(null);
-  const lastIdx = useRef<number | null>(null);
-
-  // Map buckets → viewBox coordinates (0-100 x, 0-100 y inverted)
-  const points = useMemo(() => {
-    const n = buckets.length;
-    return buckets.map((b, i) => {
-      if (b.remaining == null) return null;
-      const r = Math.max(0, Math.min(100, b.remaining));
-      return { x: n > 1 ? (i / (n - 1)) * 100 : 50, y: 100 - r, i, label: b.label, remaining: r };
-    }).filter(Boolean) as { x: number; y: number; i: number; label: string; remaining: number }[];
-  }, [buckets]);
-
-  const color = pct <= 10 ? "#ef4444" : pct <= 30 ? "#f59e0b" : "#10b981";
-
-  const { poly, area } = useMemo(() => {
-    if (points.length < 2) return { poly: "", area: "" };
-    const p = points.map(pt => `${pt.x},${pt.y}`).join(" ");
-    const first = points[0], last = points[points.length - 1];
-    const a = `M${first.x},${first.y} ${points.slice(1).map(pt => `L${pt.x},${pt.y}`).join(" ")} L${last.x},100 L${first.x},100 Z`;
-    return { poly: p, area: a };
-  }, [points]);
-
-  const onMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const idx = Math.round(ratio * (buckets.length - 1));
-    if (idx !== lastIdx.current) { lastIdx.current = idx; setHovered(idx); }
-  }, [buckets.length]);
-
-  const onLeave = useCallback(() => { lastIdx.current = null; setHovered(null); }, []);
-
-  if (points.length < 2) return null;
-
-  // Find the filled point closest to the hovered bucket index
-  const hBucket = hovered != null ? buckets[hovered] ?? null : null;
-  const hLeftPct = hovered != null && buckets.length > 1 ? (hovered / (buckets.length - 1)) * 100 : null;
-
-  return (
-    <div className="relative mt-1.5 group/spark">
-      <svg
-        viewBox="0 0 100 100"
-        preserveAspectRatio="none"
-        className="w-full h-7 cursor-crosshair"
-        onMouseMove={onMove}
-        onMouseLeave={onLeave}
-        role="img"
-        aria-label={`Quota trend sparkline, ${points.length} data points`}
-      >
-        <defs>
-          <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.2" />
-            <stop offset="100%" stopColor={color} stopOpacity="0.01" />
-          </linearGradient>
-        </defs>
-        <path d={area} fill={`url(#${id})`} />
-        <polyline
-          points={poly}
-          fill="none"
-          stroke={color}
-          strokeWidth="1.5"
-          vectorEffect="non-scaling-stroke"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {/* Hover guideline */}
-        {hLeftPct != null && (
-          <line x1={hLeftPct} y1="0" x2={hLeftPct} y2="100"
-            stroke={color} strokeWidth="1" vectorEffect="non-scaling-stroke"
-            strokeDasharray="2 2" opacity="0.4" />
-        )}
-      </svg>
-
-      {/* Hover dot (CSS-positioned to avoid SVG distortion) */}
-      {hovered != null && hBucket?.remaining != null && (() => {
-        const r = Math.max(0, Math.min(100, hBucket.remaining));
-        return (
-          <div
-            className="absolute w-[7px] h-[7px] rounded-full pointer-events-none ring-[1.5px] ring-white dark:ring-zinc-900"
-            style={{
-              left: `${hLeftPct}%`, top: `${100 - r}%`,
-              transform: "translate(-50%, -50%)", backgroundColor: color,
-            }}
-          />
-        );
-      })()}
-
-      {/* Tooltip */}
-      {hBucket && hLeftPct != null && (
-        <div
-          className="absolute bottom-full mb-1 pointer-events-none z-10"
-          style={{ left: `${Math.max(10, Math.min(90, hLeftPct))}%`, transform: "translateX(-50%)" }}
-        >
-          <div className="rounded-md bg-zinc-900 dark:bg-zinc-800 border border-zinc-700/60 px-2 py-1 shadow-lg text-center">
-            <span className="text-[10px] text-zinc-400">{hBucket.label}</span>
-            {hBucket.remaining != null ? (
-              <span className="text-[11px] font-semibold tabular-nums ml-1.5" style={{ color }}>
-                {Math.round(hBucket.remaining)}%
-              </span>
-            ) : (
-              <span className="text-[10px] text-zinc-600 ml-1.5">—</span>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -279,11 +177,14 @@ function buildDailyBuckets(history: QuotaHistoryItem[], now: Date, count: number
       new Date(s.fetchedAt).getTime() >= start.getTime() &&
       new Date(s.fetchedAt).getTime() < end.getTime(),
     );
-    return { label: `${start.toLocaleString("default", { month: "short" })} ${start.getDate()}`, remaining: snap?.weeklyPct ?? null };
+    return {
+      label: `${start.toLocaleString("default", { month: "short" })} ${start.getDate()}`,
+      remaining: snap?.weeklyPct ?? null,
+    };
   }).reverse();
 }
 
-// ─── Trend (linear regression on last 5 filled points) ──────────────────────
+// ─── Trend (linear regression on last 5 filled) ─────────────────────────────
 
 function getTrend(buckets: Bucket[]): Trend {
   const vals = buckets.filter(b => b.remaining != null).map(b => b.remaining!);

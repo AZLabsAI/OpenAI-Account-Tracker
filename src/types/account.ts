@@ -51,6 +51,14 @@ export const CHATGPT_AGENTS: ChatGPTAgent[] = [
   "ChatGPT on Work-PC",
 ];
 
+export type SparklineStyle = "bars" | "wave" | "dots";
+
+export const SPARKLINE_STYLES: { value: SparklineStyle; label: string; icon: string }[] = [
+  { value: "bars",  label: "Bars",  icon: "▥" },
+  { value: "wave",  label: "Wave",  icon: "∿" },
+  { value: "dots",  label: "Dots",  icon: "⋯" },
+];
+
 export type AccountType = "Primary account" | "Personal account" | "Work account" | "Business account" | "1 Month Plus Gift";
 
 export const ACCOUNT_TYPES: AccountType[] = [
@@ -119,6 +127,8 @@ export interface Account {
    * When set, the dashboard will automatically refresh quota at this cadence.
    */
   refreshIntervalMins?: number | null;
+  /** Sparkline visualization style. Default "bars". */
+  sparklineStyle?: SparklineStyle;
 }
 
 /** Live rate-limit snapshot from `account/rateLimits/read`. */

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState, useCallback, useRef, useEffect } from "react";
-import { Account, CodexAgent, ChatGPTAgent, ACCOUNT_TYPES, AccountType, SUBSCRIPTION_TIERS, SubscriptionTier } from "@/types";
+import { Account, CodexAgent, ChatGPTAgent, ACCOUNT_TYPES, AccountType, SUBSCRIPTION_TIERS, SubscriptionTier, SPARKLINE_STYLES, SparklineStyle } from "@/types";
 import { formatDate, daysUntilExpiration } from "@/data/accounts";
 import { getAccentStripClass, getAvatarAccentClass } from "@/lib/account-accent";
 import { formatLastFetchedAgo } from "@/lib/format-time";
@@ -564,7 +564,7 @@ export function AccountCard({
             {account.quotaData && (
               <>
                 <div className="my-4 h-px bg-zinc-200 dark:bg-zinc-800/80" />
-                <QuotaBar quotaData={account.quotaData} accountId={account.id} />
+                <QuotaBar quotaData={account.quotaData} accountId={account.id} sparklineStyle={account.sparklineStyle} />
               </>
             )}
 
@@ -890,6 +890,38 @@ export function AccountCard({
                     Sign in on the front of this card first to unlock auto-refresh.
                   </p>
                 )}
+              </div>
+
+              {/* ── Sparkline style ───────────────────────────────────── */}
+              <div>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-2 block">
+                  Sparkline Style
+                </label>
+                <p className="text-[11px] text-zinc-600 mb-3 leading-relaxed">
+                  Choose how quota history is visualized below the progress bar.
+                </p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {SPARKLINE_STYLES.map(({ value, label, icon }) => {
+                    const isActive = (value === (account.sparklineStyle ?? "bars"));
+                    return (
+                      <button
+                        key={value}
+                        onClick={() => {
+                          if (isActive) return;
+                          onUpdateSettings(account.id, { sparklineStyle: value as SparklineStyle });
+                        }}
+                        className={`rounded-lg px-2.5 py-2 text-[11px] font-medium border transition-colors text-center
+                          ${isActive
+                            ? "bg-sky-500/15 text-sky-400 dark:text-sky-300 border-sky-500/30"
+                            : "bg-zinc-100 dark:bg-zinc-800/40 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-700/40 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 cursor-pointer"
+                          }`}
+                      >
+                        <span className="text-sm mr-1">{icon}</span>
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* ── Current status summary ────────────────────────────────── */}

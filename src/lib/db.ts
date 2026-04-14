@@ -5,7 +5,7 @@ import type { Account } from "@/types";
 
 const DB_PATH = path.join(process.cwd(), "data.db");
 const SCHEMA_VERSION_KEY = "schema_version";
-const LATEST_SCHEMA_VERSION = 9;
+const LATEST_SCHEMA_VERSION = 10;
 
 let _db: Database.Database | null = null;
 
@@ -88,7 +88,8 @@ function createFinalAccountsTable(db: Database.Database) {
       chatgptAssignedTo   TEXT NOT NULL DEFAULT '[]',
       codexHomePath       TEXT,
       quotaData           TEXT,
-      refreshIntervalMins INTEGER
+      refreshIntervalMins INTEGER,
+      sparklineStyle      TEXT
     )
   `);
 }
@@ -255,6 +256,14 @@ const migrations: Migration[] = [
       db.exec(`CREATE INDEX IF NOT EXISTS idx_quota_history_account ON quota_history(accountId, fetchedAt)`);
     },
   },
+  {
+    version: 10,
+    up(db) {
+      if (!hasColumn(db, "accounts", "sparklineStyle")) {
+        db.exec("ALTER TABLE accounts ADD COLUMN sparklineStyle TEXT");
+      }
+    },
+  },
 ];
 
 function migrateSchema(db: Database.Database) {
@@ -287,13 +296,15 @@ export function getDb(): Database.Database {
         usageLimits, starred, inUse, pinned, pinOrder,
         notes, lastChecked, avatarUrl, accountType,
         codexAssignedTo, chatgptAssignedTo,
-        codexHomePath, quotaData, refreshIntervalMins
+        codexHomePath, quotaData, refreshIntervalMins,
+        sparklineStyle
       ) VALUES (
         @id, @name, @email, @subscription, @expirationDate,
         @usageLimits, @starred, @inUse, @pinned, @pinOrder,
         @notes, @lastChecked, @avatarUrl, @accountType,
         @codexAssignedTo, @chatgptAssignedTo,
-        @codexHomePath, @quotaData, @refreshIntervalMins
+        @codexHomePath, @quotaData, @refreshIntervalMins,
+        @sparklineStyle
       )
     `);
     const insertMany = _db.transaction((accs: Account[]) => {
@@ -318,6 +329,7 @@ export function getDb(): Database.Database {
           codexHomePath:     a.codexHomePath ?? null,
           quotaData:         a.quotaData ? JSON.stringify(a.quotaData) : null,
           refreshIntervalMins: a.refreshIntervalMins ?? null,
+          sparklineStyle:    a.sparklineStyle ?? null,
         });
       }
     });
@@ -349,6 +361,7 @@ function rowToAccount(row: Record<string, unknown>): Account {
     codexHomePath:     (row.codexHomePath as string) ?? undefined,
     quotaData:         row.quotaData ? JSON.parse(row.quotaData as string) : undefined,
     refreshIntervalMins: row.refreshIntervalMins != null ? (row.refreshIntervalMins as number) : undefined,
+    sparklineStyle:      (row.sparklineStyle as Account["sparklineStyle"]) ?? undefined,
   };
 }
 
@@ -386,6 +399,7 @@ export function updateAccount(id: string, patch: Partial<Account>): Account | nu
   if (patch.codexHomePath      !== undefined) { fields.push("codexHomePath = @codexHomePath");           values.codexHomePath     = patch.codexHomePath ?? null; }
   if (patch.quotaData          !== undefined) { fields.push("quotaData = @quotaData");                   values.quotaData         = patch.quotaData ? JSON.stringify(patch.quotaData) : null; }
   if (patch.refreshIntervalMins !== undefined) { fields.push("refreshIntervalMins = @refreshIntervalMins"); values.refreshIntervalMins = patch.refreshIntervalMins ?? null; }
+  if (patch.sparklineStyle      !== undefined) { fields.push("sparklineStyle = @sparklineStyle");           values.sparklineStyle      = patch.sparklineStyle ?? null; }
   if (patch.avatarUrl          !== undefined) { fields.push("avatarUrl = @avatarUrl");                     values.avatarUrl         = patch.avatarUrl ?? null; }
 
   if (fields.length === 0) return null;
