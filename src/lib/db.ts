@@ -630,3 +630,20 @@ export function getQuotaHistory(accountId: string, limit = 24): { fetchedAt: str
     WHERE accountId = @accountId ORDER BY fetchedAt DESC LIMIT @limit
   `).all({ accountId, limit }) as { fetchedAt: string; primaryPct: number | null; weeklyPct: number | null }[];
 }
+
+export interface QuotaHistoryRow {
+  accountId: string;
+  fetchedAt: string;
+  primaryPct: number | null;
+  weeklyPct: number | null;
+}
+
+// Return quota snapshots across all accounts taken on or after `sinceIso`,
+// newest first. Used by the global-reset detector.
+export function getRecentQuotaSnapshots(sinceIso: string): QuotaHistoryRow[] {
+  const db = getDb();
+  return db.prepare(`
+    SELECT accountId, fetchedAt, primaryPct, weeklyPct FROM quota_history
+    WHERE fetchedAt >= @since ORDER BY fetchedAt DESC
+  `).all({ since: sinceIso }) as QuotaHistoryRow[];
+}

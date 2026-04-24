@@ -26,11 +26,14 @@ interface CodexResetHeaderModel {
 function isCodexResetStatusResponse(value: unknown): value is CodexResetStatusResponse {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value as Record<string, unknown>;
+  const sourceOk = candidate.source === undefined
+    || candidate.source === "local" || candidate.source === "upstream" || candidate.source === "merged";
   return (
     (candidate.status === "yes" || candidate.status === "no" || candidate.status === "unavailable")
     && typeof candidate.configured === "boolean"
     && (typeof candidate.resetAt === "string" || candidate.resetAt === null)
     && (typeof candidate.updatedAt === "string" || candidate.updatedAt === null)
+    && sourceOk
   );
 }
 
@@ -83,16 +86,25 @@ export function buildCodexResetHeaderModel(
     : null;
 
   if (status.status === "yes") {
-    const metaText = resetLabel && resetIsFuture === false
+    const sourceSuffix = status.source === "local"
+      ? ` · detected on ${status.localAccountCount ?? "your"} account${status.localAccountCount === 1 ? "" : "s"}`
+      : status.source === "merged"
+        ? " · confirmed locally"
+        : "";
+    const metaBase = resetLabel && resetIsFuture === false
       ? `Reset ${resetLabel}`
       : updatedLabel
         ? `Updated ${updatedLabel}`
         : null;
-    const title = updatedLabel
+    const metaText = metaBase ? `${metaBase}${sourceSuffix}` : (sourceSuffix ? sourceSuffix.replace(/^ · /, "") : null);
+    const titleBase = updatedLabel
       ? `Codex reset detected. Last updated ${updatedLabel}.`
       : "Codex reset detected.";
+    const title = status.source === "local"
+      ? `${titleBase} Detected from your account quotas hitting 100%.`
+      : titleBase;
     return {
-      pillLabel: "Codex Reset: YES",
+      pillLabel: status.source === "local" ? "Codex Reset: YES ⚡" : "Codex Reset: YES",
       metaText,
       title,
       tone: "yes",
