@@ -5,7 +5,7 @@ import type { Account } from "@/types";
 
 const DB_PATH = path.join(process.cwd(), "data.db");
 const SCHEMA_VERSION_KEY = "schema_version";
-const LATEST_SCHEMA_VERSION = 8;
+const LATEST_SCHEMA_VERSION = 10;
 
 let _db: Database.Database | null = null;
 
@@ -88,7 +88,8 @@ function createFinalAccountsTable(db: Database.Database) {
       chatgptAssignedTo   TEXT NOT NULL DEFAULT '[]',
       codexHomePath       TEXT,
       quotaData           TEXT,
-      refreshIntervalMins INTEGER
+      refreshIntervalMins INTEGER,
+      sparklineStyle      TEXT
     )
   `);
 }
@@ -239,6 +240,30 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 9,
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS quota_history (
+          id         INTEGER PRIMARY KEY AUTOINCREMENT,
+          accountId  TEXT NOT NULL,
+          fetchedAt  TEXT NOT NULL,
+          primaryPct REAL,
+          weeklyPct  REAL,
+          UNIQUE(accountId, fetchedAt)
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_quota_history_account ON quota_history(accountId, fetchedAt)`);
+    },
+  },
+  {
+    version: 10,
+    up(db) {
+      if (!hasColumn(db, "accounts", "sparklineStyle")) {
+        db.exec("ALTER TABLE accounts ADD COLUMN sparklineStyle TEXT");
+      }
+    },
+  },
 ];
 
 function migrateSchema(db: Database.Database) {
@@ -271,13 +296,15 @@ export function getDb(): Database.Database {
         usageLimits, starred, inUse, pinned, pinOrder,
         notes, lastChecked, avatarUrl, accountType,
         codexAssignedTo, chatgptAssignedTo,
-        codexHomePath, quotaData, refreshIntervalMins
+        codexHomePath, quotaData, refreshIntervalMins,
+        sparklineStyle
       ) VALUES (
         @id, @name, @email, @subscription, @expirationDate,
         @usageLimits, @starred, @inUse, @pinned, @pinOrder,
         @notes, @lastChecked, @avatarUrl, @accountType,
         @codexAssignedTo, @chatgptAssignedTo,
-        @codexHomePath, @quotaData, @refreshIntervalMins
+        @codexHomePath, @quotaData, @refreshIntervalMins,
+        @sparklineStyle
       )
     `);
     const insertMany = _db.transaction((accs: Account[]) => {
@@ -302,6 +329,7 @@ export function getDb(): Database.Database {
           codexHomePath:     a.codexHomePath ?? null,
           quotaData:         a.quotaData ? JSON.stringify(a.quotaData) : null,
           refreshIntervalMins: a.refreshIntervalMins ?? null,
+          sparklineStyle:    a.sparklineStyle ?? null,
         });
       }
     });
@@ -333,6 +361,7 @@ function rowToAccount(row: Record<string, unknown>): Account {
     codexHomePath:     (row.codexHomePath as string) ?? undefined,
     quotaData:         row.quotaData ? JSON.parse(row.quotaData as string) : undefined,
     refreshIntervalMins: row.refreshIntervalMins != null ? (row.refreshIntervalMins as number) : undefined,
+    sparklineStyle:      (row.sparklineStyle as Account["sparklineStyle"]) ?? undefined,
   };
 }
 
@@ -370,6 +399,7 @@ export function updateAccount(id: string, patch: Partial<Account>): Account | nu
   if (patch.codexHomePath      !== undefined) { fields.push("codexHomePath = @codexHomePath");           values.codexHomePath     = patch.codexHomePath ?? null; }
   if (patch.quotaData          !== undefined) { fields.push("quotaData = @quotaData");                   values.quotaData         = patch.quotaData ? JSON.stringify(patch.quotaData) : null; }
   if (patch.refreshIntervalMins !== undefined) { fields.push("refreshIntervalMins = @refreshIntervalMins"); values.refreshIntervalMins = patch.refreshIntervalMins ?? null; }
+  if (patch.sparklineStyle      !== undefined) { fields.push("sparklineStyle = @sparklineStyle");           values.sparklineStyle      = patch.sparklineStyle ?? null; }
   if (patch.avatarUrl          !== undefined) { fields.push("avatarUrl = @avatarUrl");                     values.avatarUrl         = patch.avatarUrl ?? null; }
 
   if (fields.length === 0) return null;
@@ -579,4 +609,24 @@ export function clearNotificationEvents(): number {
   const db = getDb();
   const result = db.prepare("DELETE FROM notification_events").run();
   return result.changes;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Quota history helpers
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export function insertQuotaSnapshot(accountId: string, fetchedAt: string, primaryPct: number | null, weeklyPct: number | null): void {
+  const db = getDb();
+  db.prepare(`
+    INSERT OR IGNORE INTO quota_history (accountId, fetchedAt, primaryPct, weeklyPct)
+    VALUES (@accountId, @fetchedAt, @primaryPct, @weeklyPct)
+  `).run({ accountId, fetchedAt, primaryPct, weeklyPct });
+}
+
+export function getQuotaHistory(accountId: string, limit = 24): { fetchedAt: string; primaryPct: number | null; weeklyPct: number | null }[] {
+  const db = getDb();
+  return db.prepare(`
+    SELECT fetchedAt, primaryPct, weeklyPct FROM quota_history
+    WHERE accountId = @accountId ORDER BY fetchedAt DESC LIMIT @limit
+  `).all({ accountId, limit }) as { fetchedAt: string; primaryPct: number | null; weeklyPct: number | null }[];
 }

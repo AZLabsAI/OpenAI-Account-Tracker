@@ -1,12 +1,13 @@
 {
   "name": "openai-account-tracker",
-  "version": "0.0.2-beta",
+  "version": "0.0.4-beta",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {

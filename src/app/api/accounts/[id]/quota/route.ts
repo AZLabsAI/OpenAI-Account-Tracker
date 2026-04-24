@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getAccount, updateAccount } from "@/lib/db";
+import { getAccount, updateAccount, insertQuotaSnapshot } from "@/lib/db";
 import { logInfo, logSuccess, logError } from "@/lib/logger";
 import { detectTransitions, processTransitions } from "@/lib/notifications";
 import { getNotificationSettings } from "@/lib/notify-settings";
@@ -60,11 +60,41 @@ export async function POST(
     // Process notifications (dedup + deliver)
     const notificationEvents = await processTransitions(account, transitions);
 
-    // ── Save new quota ────────────────────────────────────────────────────
-    updateAccount(id, {
+    // ── Detect quota depletion → auto-demote the account ────────────────
+    const depleted =
+      (quotaData.primary?.usedPercent ?? 0) >= 100 ||
+      (quotaData.secondary?.usedPercent ?? 0) >= 100;
+
+    const wasDemoted =
+      depleted && (account.inUse || account.pinned || account.starred);
+
+    const accountPatch: Record<string, unknown> = {
       quotaData,
       lastChecked: new Date().toISOString(),
-    });
+    };
+
+    if (wasDemoted) {
+      accountPatch.inUse = false;
+      accountPatch.pinned = false;
+      accountPatch.pinOrder = 0;
+      accountPatch.starred = false;
+    }
+
+    updateAccount(id, accountPatch);
+
+    insertQuotaSnapshot(
+      id,
+      quotaData.fetchedAt,
+      quotaData.primary ? 100 - quotaData.primary.usedPercent : null,
+      quotaData.secondary ? 100 - quotaData.secondary.usedPercent : null,
+    );
+
+    if (wasDemoted) {
+      logInfo("account", `Auto-demoted ${account.email} — quota depleted, cleared in-use/pinned/starred`, {
+        accountId: id,
+        accountEmail: account.email,
+      });
+    }
 
     const durationMs = Date.now() - t0;
     const primaryLeft = quotaData.primary ? `${100 - quotaData.primary.usedPercent}%` : "n/a";
@@ -84,8 +114,8 @@ export async function POST(
 
     return NextResponse.json({
       ...quotaData,
-      // Include any new notification events so the client can fire Web Notifications
       notifications: settings.webEnabled && notificationEvents.length > 0 ? notificationEvents : undefined,
+      ...(wasDemoted ? { demoted: true } : {}),
     });
 
   } catch (err) {

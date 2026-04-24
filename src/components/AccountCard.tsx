@@ -2,8 +2,10 @@
 
 import Image from "next/image";
 import { useState, useCallback, useRef, useEffect } from "react";
-import { Account, CodexAgent, ChatGPTAgent, ACCOUNT_TYPES, AccountType } from "@/types";
+import { Account, CodexAgent, ChatGPTAgent, ACCOUNT_TYPES, AccountType, SUBSCRIPTION_TIERS, SubscriptionTier, SPARKLINE_STYLES, SparklineStyle } from "@/types";
 import { formatDate, daysUntilExpiration } from "@/data/accounts";
+import { getAccentStripClass, getAvatarAccentClass } from "@/lib/account-accent";
+import { formatLastFetchedAgo } from "@/lib/format-time";
 import { getAccountStatus, getExpiryBorderUrgency } from "@/lib/account-health";
 import type { LoginState, QuotaState } from "@/hooks/useAccountRefreshController";
 import { StatusBadge } from "./StatusBadge";
@@ -79,6 +81,9 @@ export function AccountCard({
   const [nameError, setNameError] = useState<string | null>(null);
   const [codexAgentInput, setCodexAgentInput] = useState("");
   const [chatgptAgentInput, setChatgptAgentInput] = useState("");
+  const [editSubscription, setEditSubscription] = useState(account.subscription);
+  const [editExpiry, setEditExpiry] = useState(account.expirationDate ?? "");
+  const [expiryError, setExpiryError] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -110,6 +115,49 @@ export function AccountCard({
     setEditName(account.name);
     setIsEditingName(false);
   }, [account.name]);
+
+  useEffect(() => {
+    setEditSubscription(account.subscription);
+  }, [account.subscription]);
+
+  useEffect(() => {
+    setEditExpiry(account.expirationDate ?? "");
+  }, [account.expirationDate]);
+
+  const requiresExpirationDate = editSubscription !== "Free";
+
+  useEffect(() => {
+    if (!requiresExpirationDate && editExpiry) {
+      setEditExpiry("");
+      setExpiryError(null);
+    }
+  }, [editExpiry, requiresExpirationDate]);
+
+  const saveSubscription = useCallback(() => {
+    if (editSubscription === account.subscription) return;
+    const normalizedExpiry = editExpiry.trim();
+    if (requiresExpirationDate && !normalizedExpiry) {
+      setExpiryError("Expiry date required for paid plans");
+      return;
+    }
+    onUpdateSettings(account.id, {
+      subscription: editSubscription,
+      ...(editSubscription === "Free" ? { expirationDate: null } : {}),
+    });
+    setExpiryError(null);
+  }, [account.id, account.subscription, editExpiry, editSubscription, onUpdateSettings, requiresExpirationDate]);
+
+  const saveExpiry = useCallback(() => {
+    const value = editExpiry.trim() || null;
+    if (value === (account.expirationDate ?? null)) return;
+    // Basic sanity check
+    if (value && isNaN(new Date(value).getTime())) {
+      setExpiryError("Invalid date");
+      return;
+    }
+    setExpiryError(null);
+    onUpdateSettings(account.id, { expirationDate: value });
+  }, [account.id, account.expirationDate, editExpiry, onUpdateSettings]);
 
   useEffect(() => {
     if (isEditingName) {
@@ -214,33 +262,52 @@ export function AccountCard({
 
   const borderClass = urgencyBorderClass ?? baseBorderClass;
 
-  // ── Accent strip ──────────────────────────────────────────────────────────
-  const accentStrip = isPinned
-    ? <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b from-violet-400 to-violet-600 rounded-l-2xl" />
-    : isStarred
-      ? <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b from-amber-400 to-amber-600 rounded-l-2xl" />
-      : isInUse
-        ? <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b from-blue-400 to-blue-600 rounded-l-2xl" />
-        : null;
+  // ── Accent strip (shared helper) ───────────────────────────────────────────
+  const accentStripClass = getAccentStripClass(account);
+  const accentStrip = accentStripClass ? <div className={accentStripClass} /> : null;
+  const avatarAccentClass = getAvatarAccentClass(account);
+
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setConfirmDelete(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [confirmDelete]);
 
   return (
     <>
       {/* Delete confirmation dialog */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="rounded-2xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl w-full max-w-sm mx-4">
-            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Delete account?</h3>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setConfirmDelete(false)}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-account-title"
+            className="rounded-2xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl w-full max-w-sm mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="delete-account-title" className="text-base font-semibold text-zinc-100 mb-1">
+              Delete account?
+            </h3>
             <p className="text-sm text-zinc-400 mb-5">
-              <span className="font-medium text-zinc-800 dark:text-zinc-200">{account.email}</span> will be permanently removed. This cannot be undone.
+              <span className="font-medium text-zinc-200">{account.email}</span> will be permanently removed. This cannot be undone.
             </p>
             <div className="flex gap-3 justify-end">
               <button
+                type="button"
                 onClick={() => setConfirmDelete(false)}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors"
+                className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={() => { setConfirmDelete(false); onDelete(account.id); }}
                 className="rounded-lg px-4 py-2 text-sm font-medium bg-red-500/15 text-red-400 hover:bg-red-500/25 transition-colors"
               >
@@ -254,7 +321,7 @@ export function AccountCard({
       {/* 3D flip container */}
       <div className="[perspective:1200px]">
         <div
-          className={`relative transition-transform duration-500 [transform-style:preserve-3d] ${
+          className={`relative transition-transform duration-500 motion-reduce:duration-0 [transform-style:preserve-3d] ${
             flipped ? "[transform:rotateY(180deg)]" : ""
           }`}
         >
@@ -279,17 +346,10 @@ export function AccountCard({
                   onChange={handleAvatarUpload}
                 />
                 <button
+                  type="button"
                   onClick={() => avatarInputRef.current?.click()}
                   className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white overflow-hidden group/avatar cursor-pointer ${
-                    !account.avatarUrl ? (
-                      isPinned
-                        ? "bg-gradient-to-br from-violet-400 to-violet-600"
-                        : isStarred
-                          ? "bg-gradient-to-br from-amber-400 to-orange-500"
-                          : isInUse
-                            ? "bg-gradient-to-br from-blue-400 to-blue-600"
-                            : "bg-gradient-to-br from-emerald-500 to-teal-600"
-                    ) : ""
+                    !account.avatarUrl ? avatarAccentClass : ""
                   }`}
                   title="Click to change avatar"
                 >
@@ -345,11 +405,12 @@ export function AccountCard({
               <div className="flex items-center gap-1.5 shrink-0">
                 {/* Pin */}
                 <button
+                  type="button"
                   onClick={() => onTogglePin(account.id)}
                   className={`rounded-md p-1 transition-colors ${
                     isPinned
                       ? "text-violet-400 hover:text-violet-300"
-                      : "text-zinc-600 hover:text-zinc-400 opacity-0 group-hover:opacity-100"
+                      : "text-zinc-600 hover:text-zinc-400 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                   }`}
                   title={isPinned ? "Unpin account" : "Pin account"}
                 >
@@ -367,11 +428,12 @@ export function AccountCard({
                 </button>
                 {/* Star */}
                 <button
+                  type="button"
                   onClick={() => onToggleStar(account.id)}
                   className={`rounded-md p-1 transition-all ${
                     isStarred
-                      ? "text-amber-400 hover:text-amber-300 drop-shadow-[0_0_6px_rgba(251,191,36,0.6)]"
-                      : "text-zinc-600 hover:text-zinc-400 opacity-0 group-hover:opacity-100"
+                      ? "text-amber-400 hover:text-amber-300"
+                      : "text-zinc-600 hover:text-zinc-400 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                   }`}
                   style={isStarred ? { filter: "drop-shadow(0 0 4px rgba(251,191,36,0.5)) drop-shadow(0 0 8px rgba(251,191,36,0.25))" } : undefined}
                   title={isStarred ? "Unstar account" : "Star account"}
@@ -416,8 +478,10 @@ export function AccountCard({
                       <span key={agent} className="inline-flex items-center gap-1 rounded-md bg-violet-500/15 border border-violet-500/25 px-1.5 py-0.5 text-[11px] font-medium text-violet-300">
                         {agent}
                         <button
+                          type="button"
                           onClick={() => onAssignCodex(account.id, (account.codexAssignedTo ?? []).filter((a) => a !== agent))}
                           className="text-violet-400 hover:text-violet-200 transition-colors leading-none"
+                          aria-label={`Remove Codex agent ${agent}`}
                         >×</button>
                       </span>
                     ))}
@@ -447,8 +511,10 @@ export function AccountCard({
                       <span key={agent} className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 border border-emerald-500/25 px-1.5 py-0.5 text-[11px] font-medium text-emerald-300">
                         {agent}
                         <button
+                          type="button"
                           onClick={() => onAssignChatGPT(account.id, (account.chatgptAssignedTo ?? []).filter((a) => a !== agent))}
                           className="text-emerald-400 hover:text-emerald-200 transition-colors leading-none"
+                          aria-label={`Remove ChatGPT agent ${agent}`}
                         >×</button>
                       </span>
                     ))}
@@ -498,7 +564,7 @@ export function AccountCard({
             {account.quotaData && (
               <>
                 <div className="my-4 h-px bg-zinc-200 dark:bg-zinc-800/80" />
-                <QuotaBar quotaData={account.quotaData} />
+                <QuotaBar quotaData={account.quotaData} accountId={account.id} sparklineStyle={account.sparklineStyle} />
               </>
             )}
 
@@ -604,15 +670,7 @@ export function AccountCard({
               <div className="flex items-center gap-2.5">
                 <div
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white overflow-hidden ${
-                    !account.avatarUrl ? (
-                      isPinned
-                        ? "bg-gradient-to-br from-violet-400 to-violet-600"
-                        : isStarred
-                          ? "bg-gradient-to-br from-amber-400 to-orange-500"
-                          : isInUse
-                            ? "bg-gradient-to-br from-blue-400 to-blue-600"
-                            : "bg-gradient-to-br from-emerald-500 to-teal-600"
-                    ) : ""
+                    !account.avatarUrl ? avatarAccentClass : ""
                   }`}
                 >
                   {account.avatarUrl ? (
@@ -699,6 +757,93 @@ export function AccountCard({
             {/* Settings content */}
             <div className="flex-1 space-y-5 overflow-y-auto min-h-0">
 
+              {/* ── Subscription Settings ────────────────────────────────── */}
+              <div>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-2 block">
+                  Subscription
+                </label>
+                <p className="text-[11px] text-zinc-600 mb-3 leading-relaxed">
+                  Change the subscription tier and keep the expiry date in sync with the current plan.
+                </p>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={editSubscription}
+                    onChange={(e) => {
+                      setEditSubscription(e.target.value as SubscriptionTier);
+                      if (expiryError) setExpiryError(null);
+                    }}
+                    className="flex-1 rounded-md border border-zinc-300 dark:border-zinc-700/60 bg-zinc-100 dark:bg-zinc-800/70 px-2.5 py-1.5 text-[12px] text-zinc-800 dark:text-zinc-200 outline-none focus:border-sky-500/50 dark:focus:border-sky-500/50 transition-colors appearance-none cursor-pointer"
+                    style={{ backgroundImage: dropdownArrow, backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center", paddingRight: "24px" }}
+                  >
+                    {SUBSCRIPTION_TIERS.map((tier) => (
+                      <option key={tier} value={tier}>{tier}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={saveSubscription}
+                    disabled={editSubscription === account.subscription}
+                    className="rounded-md border border-sky-500/30 bg-sky-500/10 px-2.5 py-1.5 text-[11px] font-medium text-sky-500 dark:text-sky-400 hover:bg-sky-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    Save plan
+                  </button>
+                </div>
+                <p className="mt-2 text-[11px] text-zinc-500">
+                  Current: <span className="text-zinc-400">{account.subscription}</span>
+                </p>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-2 block">
+                  Subscription Expiry
+                </label>
+                <p className="text-[11px] text-zinc-600 mb-3 leading-relaxed">
+                  Update the expiry date after renewing your subscription.
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={editExpiry}
+                    onChange={(e) => {
+                      setEditExpiry(e.target.value);
+                      if (expiryError) setExpiryError(null);
+                    }}
+                    disabled={!requiresExpirationDate}
+                    aria-disabled={!requiresExpirationDate}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); saveExpiry(); }
+                    }}
+                    className="flex-1 rounded-md border border-zinc-300 dark:border-zinc-700/60 bg-zinc-100 dark:bg-zinc-800/70 px-2.5 py-1.5 text-[12px] text-zinc-800 dark:text-zinc-200 outline-none focus:border-sky-500/50 dark:focus:border-sky-500/50 transition-colors"
+                  />
+                  <button
+                    onClick={saveExpiry}
+                    disabled={!requiresExpirationDate || editExpiry === (account.expirationDate ?? "")}
+                    className="rounded-md border border-sky-500/30 bg-sky-500/10 px-2.5 py-1.5 text-[11px] font-medium text-sky-500 dark:text-sky-400 hover:bg-sky-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    Save date
+                  </button>
+                </div>
+                {!requiresExpirationDate && (
+                  <p className="mt-2 text-[11px] text-zinc-500">
+                    Free accounts do not require an expiry date.
+                  </p>
+                )}
+                {account.expirationDate && (
+                  <p className="mt-2 text-[11px] text-zinc-500">
+                    Current: <span className="text-zinc-400">{expiryLabel}</span>
+                    {daysLeft !== null && (
+                      <span className={`ml-1.5 font-medium ${
+                        daysLeft <= 0 ? "text-red-400" : daysLeft <= 7 ? "text-orange-400" : "text-zinc-400"
+                      }`}>
+                        ({daysLeft <= 0 ? "expired" : `${daysLeft}d left`})
+                      </span>
+                    )}
+                  </p>
+                )}
+                {expiryError && (
+                  <p className="mt-1 text-[11px] text-red-400">{expiryError}</p>
+                )}
+              </div>
+
               {/* ── Auto-refresh interval ─────────────────────────────────── */}
               <div>
                 <label className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-2 block">
@@ -747,6 +892,38 @@ export function AccountCard({
                 )}
               </div>
 
+              {/* ── Sparkline style ───────────────────────────────────── */}
+              <div>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-2 block">
+                  Sparkline Style
+                </label>
+                <p className="text-[11px] text-zinc-600 mb-3 leading-relaxed">
+                  Choose how quota history is visualized below the progress bar.
+                </p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {SPARKLINE_STYLES.map(({ value, label, icon }) => {
+                    const isActive = (value === (account.sparklineStyle ?? "bars"));
+                    return (
+                      <button
+                        key={value}
+                        onClick={() => {
+                          if (isActive) return;
+                          onUpdateSettings(account.id, { sparklineStyle: value as SparklineStyle });
+                        }}
+                        className={`rounded-lg px-2.5 py-2 text-[11px] font-medium border transition-colors text-center
+                          ${isActive
+                            ? "bg-sky-500/15 text-sky-400 dark:text-sky-300 border-sky-500/30"
+                            : "bg-zinc-100 dark:bg-zinc-800/40 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-700/40 hover:border-zinc-400 dark:hover:border-zinc-600 hover:text-zinc-900 dark:hover:text-zinc-200 cursor-pointer"
+                          }`}
+                      >
+                        <span className="text-sm mr-1">{icon}</span>
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* ── Current status summary ────────────────────────────────── */}
               <div>
                 <label className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-2 block">
@@ -763,7 +940,7 @@ export function AccountCard({
                     <div className="flex items-center gap-2 text-[12px]">
                       <span className={`inline-block h-2 w-2 rounded-full ${staleness(account.quotaData.fetchedAt) === "fresh" ? "bg-sky-400" : staleness(account.quotaData.fetchedAt) === "aging" ? "bg-amber-400" : "bg-orange-400"}`} />
                       <span className="text-zinc-600 dark:text-zinc-400">
-                        Last fetched {timeAgo(account.quotaData.fetchedAt)}
+                        Last fetched {formatLastFetchedAgo(account.quotaData.fetchedAt)}
                       </span>
                     </div>
                   )}
@@ -924,17 +1101,6 @@ function staleness(fetchedAt?: string): "fresh" | "aging" | "stale" {
   if (ageMins < 30)  return "fresh";
   if (ageMins < 120) return "aging";
   return "stale";
-}
-
-function timeAgo(isoStr: string): string {
-  const ms = Date.now() - new Date(isoStr).getTime();
-  const mins = Math.floor(ms / 60_000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ${mins % 60}m ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
 }
 
 // ─── Sign In Button ───────────────────────────────────────────────────────────

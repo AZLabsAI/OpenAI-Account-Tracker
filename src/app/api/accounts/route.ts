@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAllAccounts, createAccount } from "@/lib/db";
 import { logInfo, logSuccess, logWarn, logError } from "@/lib/logger";
+import { pruneManagedCodexHomeArtifacts } from "@/lib/codex-runtime-home";
 
 export async function GET() {
   try {
     const accounts = getAllAccounts();
+    for (const account of accounts) {
+      if (account.codexHomePath) {
+        pruneManagedCodexHomeArtifacts(account.codexHomePath);
+      }
+    }
     return NextResponse.json(accounts);
   } catch (err) {
     logError("system", "Failed to load accounts", { detail: String(err) });

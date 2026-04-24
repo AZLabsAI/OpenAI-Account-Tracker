@@ -56,7 +56,7 @@ export function StatusBadge({ status }: Props) {
       <span className="relative flex h-1.5 w-1.5">
         {c.pulse && (
           <span
-            className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${c.dot}`}
+            className={`absolute inline-flex h-full w-full animate-ping motion-reduce:animate-none rounded-full opacity-75 ${c.dot}`}
           />
         )}
         <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${c.dot}`} />

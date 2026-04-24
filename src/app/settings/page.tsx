@@ -5,6 +5,92 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import type { NotificationEventType, NotificationSettings } from "@/types";
 import { buildWebNotificationPayload, getNotificationUiMeta } from "@/lib/notification-presentation";
 
+function NotificationsTabIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className={className} aria-hidden="true">
+      <path fillRule="evenodd" d="M8 1.75a3.75 3.75 0 0 0-3.75 3.75v.651c0 .846-.249 1.673-.716 2.38l-.196.297c-.683 1.037.06 2.422 1.3 2.422h6.724c1.24 0 1.983-1.385 1.3-2.422l-.196-.298a4.25 4.25 0 0 1-.716-2.379V5.5A3.75 3.75 0 0 0 8 1.75ZM6 12.5a2 2 0 1 0 4 0H6Z" clipRule="evenodd" />
+    </svg>
+  );
+}
+
+function LogsTabIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className={className} aria-hidden="true">
+      <path fillRule="evenodd" d="M3 2.25A1.75 1.75 0 0 0 1.25 4v8c0 .966.784 1.75 1.75 1.75h10A1.75 1.75 0 0 0 14.75 12V6.81a1.75 1.75 0 0 0-.513-1.237L10.178 1.51A1.75 1.75 0 0 0 8.94 1H3Zm5 .75v2.5c0 .966.784 1.75 1.75 1.75h2.5V12a.25.25 0 0 1-.25.25H3A.25.25 0 0 1 2.75 12V4A.25.25 0 0 1 3 3h5Zm1.5.56 2.69 2.69H9.75a.25.25 0 0 1-.25-.25V3.56ZM4.75 8a.75.75 0 0 1 .75-.75h5a.75.75 0 0 1 0 1.5h-5A.75.75 0 0 1 4.75 8Zm0 2.5a.75.75 0 0 1 .75-.75h5a.75.75 0 0 1 0 1.5h-5a.75.75 0 0 1-.75-.75Z" clipRule="evenodd" />
+    </svg>
+  );
+}
+
+function DataTabIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M2.5 4.25C2.5 3.007 4.962 2 8 2s5.5 1.007 5.5 2.25S11.038 6.5 8 6.5 2.5 5.493 2.5 4.25Z" />
+      <path d="M2.5 7.268v1.482C2.5 9.993 4.962 11 8 11s5.5-1.007 5.5-2.25V7.268C12.521 8.15 10.422 8.75 8 8.75s-4.521-.6-5.5-1.482Z" />
+      <path d="M2.5 11.768v-.518c.979.882 3.078 1.482 5.5 1.482s4.521-.6 5.5-1.482v.518C13.5 13.01 11.038 14 8 14s-5.5-.99-5.5-2.232Z" />
+    </svg>
+  );
+}
+
+function WebChannelIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className={className} aria-hidden="true">
+      <path fillRule="evenodd" d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.04 3.178A9.72 9.72 0 0 0 4.85 7.25h-2.3A5.01 5.01 0 0 1 6.04 3.178Zm0 9.644A5.01 5.01 0 0 1 2.55 8.75h2.3a9.72 9.72 0 0 0 1.19 4.072ZM8 13c-.635 0-1.659-1.38-1.659-4.25S7.365 4.5 8 4.5s1.659 1.38 1.659 4.25S8.635 13 8 13Zm1.96-.178a9.72 9.72 0 0 0 1.19-4.072h2.3a5.01 5.01 0 0 1-3.49 4.072Zm1.19-5.572a9.72 9.72 0 0 0-1.19-4.072 5.01 5.01 0 0 1 3.49 4.072h-2.3Z" clipRule="evenodd" />
+    </svg>
+  );
+}
+
+function AppleIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M10.576 1.32c.12 1.007-.27 1.999-.79 2.639-.562.69-1.482 1.224-2.354 1.155-.112-.943.328-1.935.862-2.534.59-.675 1.566-1.162 2.282-1.26Z" />
+      <path d="M12.723 8.413c-.015-1.602 1.311-2.369 1.371-2.405-.745-1.088-1.902-1.236-2.313-1.253-.984-.104-1.922.58-2.422.58-.501 0-1.275-.566-2.098-.55-1.079.016-2.073.629-2.628 1.597-1.122 1.942-.286 4.816.806 6.394.534.774 1.172 1.645 2.008 1.614.807-.032 1.112-.521 2.088-.521.977 0 1.251.521 2.104.505.87-.015 1.421-.79 1.952-1.566.612-.894.864-1.76.88-1.805-.019-.007-1.685-.647-1.748-2.59Z" />
+    </svg>
+  );
+}
+
+function TelegramIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M13.68 2.31a.75.75 0 0 0-.78-.1l-10 4.5a.75.75 0 0 0 .072 1.395l2.77.96 1.003 3.134a.75.75 0 0 0 1.278.29l1.54-1.614 2.779 2.043a.75.75 0 0 0 1.185-.445l1.25-9.25a.75.75 0 0 0-.097-.475ZM6.555 8.43l4.81-3.724-3.572 4.306-.247 1.767-.99-2.35Z" />
+    </svg>
+  );
+}
+
+function NotificationEventIcon({ eventType, className = "h-3.5 w-3.5" }: { eventType: NotificationEventType; className?: string }) {
+  switch (eventType) {
+    case "quota_warning":
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className={className} aria-hidden="true">
+          <path fillRule="evenodd" d="M6.701 2.25c.577-1 2.02-1 2.598 0l5.196 9a1.5 1.5 0 0 1-1.299 2.25H2.804a1.5 1.5 0 0 1-1.3-2.25l5.197-9ZM8 4a.75.75 0 0 1 .75.75v3a.75.75 0 0 1-1.5 0v-3A.75.75 0 0 1 8 4Zm0 8a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd" />
+        </svg>
+      );
+    case "quota_critical":
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className={className} aria-hidden="true">
+          <path fillRule="evenodd" d="M8 1.5a6.5 6.5 0 1 0 0 13A6.5 6.5 0 0 0 8 1.5ZM7.25 4.5a.75.75 0 0 1 1.5 0v3.25a.75.75 0 0 1-1.5 0V4.5ZM8 11.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd" />
+        </svg>
+      );
+    case "quota_exhausted":
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className={className} aria-hidden="true">
+          <path fillRule="evenodd" d="M8 1.5a6.5 6.5 0 1 0 0 13A6.5 6.5 0 0 0 8 1.5ZM5.28 5.28a.75.75 0 0 1 1.06 0L8 6.94l1.66-1.66a.75.75 0 1 1 1.06 1.06L9.06 8l1.66 1.66a.75.75 0 1 1-1.06 1.06L8 9.06l-1.66 1.66a.75.75 0 1 1-1.06-1.06L6.94 8 5.28 6.34a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+        </svg>
+      );
+    case "quota_reset":
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className={className} aria-hidden="true">
+          <path fillRule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clipRule="evenodd" />
+        </svg>
+      );
+    case "account_switch":
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className={className} aria-hidden="true">
+          <path fillRule="evenodd" d="M12.836 2.727a.75.75 0 0 1 .75.75v2.591a.75.75 0 0 1-.75.75h-2.59a.75.75 0 0 1 0-1.5h.779a3.75 3.75 0 0 0-6.502.778.75.75 0 1 1-1.3-.75 5.25 5.25 0 0 1 9.102-1.09h.51V3.477a.75.75 0 0 1 .75-.75Zm-9.672 5.705a.75.75 0 0 1 .75.75h2.59a.75.75 0 0 1 0 1.5h-.778a3.75 3.75 0 0 0 6.501-.778.75.75 0 1 1 1.3.75 5.25 5.25 0 0 1-9.102 1.09h-.511v.779a.75.75 0 0 1-1.5 0V9.182a.75.75 0 0 1 .75-.75Z" clipRule="evenodd" />
+        </svg>
+      );
+  }
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type LogLevel = "info" | "success" | "warn" | "error";
@@ -107,9 +193,21 @@ export default function SettingsPage() {
   const [testResult, setTestResult] = useState<{ channel: string; success: boolean; text: string } | null>(null);
   const [testEventType, setTestEventType] = useState<NotificationEventType>("quota_critical");
   // Active settings tab
-  const [activeTab, setActiveTab] = useState<"notifications" | "logs">("notifications");
+  const [activeTab, setActiveTab] = useState<"notifications" | "logs" | "data">("notifications");
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!confirmClear) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setConfirmClear(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [confirmClear]);
 
   const formatTimestamp = useCallback((iso?: string | null) => {
     if (!iso) return "Never";
@@ -360,7 +458,10 @@ export default function SettingsPage() {
                   : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
               }`}
             >
-              🔔 Notifications
+              <span className="inline-flex items-center gap-1.5">
+                <NotificationsTabIcon />
+                <span>Notifications</span>
+              </span>
             </button>
             <button
               onClick={() => setActiveTab("logs")}
@@ -370,7 +471,23 @@ export default function SettingsPage() {
                   : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
               }`}
             >
-              📋 Logs
+              <span className="inline-flex items-center gap-1.5">
+                <LogsTabIcon />
+                <span>Logs</span>
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab("data")}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                activeTab === "data"
+                  ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                  : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+              }`}
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <DataTabIcon />
+                <span>Data</span>
+              </span>
             </button>
           </div>
 
@@ -460,7 +577,12 @@ export default function SettingsPage() {
                               : "bg-zinc-100 dark:bg-zinc-800/40 text-zinc-500 border-zinc-300 dark:border-zinc-700/40 hover:border-zinc-400 dark:hover:border-zinc-600"
                           }`}
                         >
-                          {meta.emoji} {meta.label}
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className={meta.color}>
+                              <NotificationEventIcon eventType={value} />
+                            </span>
+                            <span>{meta.label}</span>
+                          </span>
                         </button>
                       );
                     })}
@@ -473,7 +595,7 @@ export default function SettingsPage() {
                   <div className="rounded-xl border border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/50 p-5 space-y-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="text-lg">🌐</span>
+                        <WebChannelIcon className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
                         <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Web</h3>
                       </div>
                       <ToggleSwitch
@@ -517,7 +639,7 @@ export default function SettingsPage() {
                   <div className="rounded-xl border border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/50 p-5 space-y-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="text-lg">🍎</span>
+                        <AppleIcon className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
                         <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Native macOS</h3>
                       </div>
                       <ToggleSwitch
@@ -557,7 +679,7 @@ export default function SettingsPage() {
                   <div className="rounded-xl border border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900/50 p-5 space-y-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="text-lg">✈️</span>
+                        <TelegramIcon className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
                         <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Telegram</h3>
                       </div>
                       <ToggleSwitch
@@ -803,19 +925,27 @@ export default function SettingsPage() {
                   <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-3">How Notifications Work</h3>
                   <div className="grid gap-3 md:grid-cols-2 text-[11px] text-zinc-500 leading-relaxed">
                     <div className="flex gap-2">
-                      <span className="text-base">📊</span>
+                      <span className="text-sky-500 dark:text-sky-400 shrink-0 mt-0.5">
+                        <DataTabIcon />
+                      </span>
                       <p>Every quota refresh compares old vs. new remaining %. Each notification shows <strong>both</strong> 5-hour and Weekly status.</p>
                     </div>
                     <div className="flex gap-2">
-                      <span className="text-base">⚠️</span>
+                      <span className="text-amber-500 dark:text-amber-400 shrink-0 mt-0.5">
+                        <NotificationEventIcon eventType="quota_warning" />
+                      </span>
                       <p>Alerts fire when remaining drops below your thresholds (15%, 10%, 5%). Warning and critical levels still fire once per cycle.</p>
                     </div>
                     <div className="flex gap-2">
-                      <span className="text-base">🚨</span>
+                      <span className="text-red-500 dark:text-red-400 shrink-0 mt-0.5">
+                        <NotificationEventIcon eventType="quota_exhausted" />
+                      </span>
                       <p>When a quota hits 0% remaining, you get one <strong>alarm-level</strong> alert. After that, the app checks depleted accounts in the background and alerts again when quota returns.</p>
                     </div>
                     <div className="flex gap-2">
-                      <span className="text-base">✅</span>
+                      <span className="text-emerald-500 dark:text-emerald-400 shrink-0 mt-0.5">
+                        <NotificationEventIcon eventType="quota_reset" />
+                      </span>
                       <p>When usage drops from ≥90% to below 50%, a reset notification fires so you know you&apos;re back at full capacity, even if the account was not marked as in use.</p>
                     </div>
                   </div>
@@ -896,19 +1026,29 @@ export default function SettingsPage() {
 
               {/* Search */}
               <div className="relative">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-500 dark:text-zinc-600 pointer-events-none">
+                <label htmlFor="logs-search" className="sr-only">
+                  Search logs
+                </label>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-500 dark:text-zinc-600 pointer-events-none" aria-hidden="true">
                   <path fillRule="evenodd" d="M9.965 11.026a5 5 0 1 1 1.06-1.06l2.755 2.754a.75.75 0 1 1-1.06 1.06l-2.755-2.754ZM10.5 7a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Z" clipRule="evenodd" />
                 </svg>
                 <input
-                  type="text"
+                  id="logs-search"
+                  type="search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search logs…"
+                  aria-label="Search logs"
                   className="w-48 rounded-md bg-zinc-100 dark:bg-zinc-800/40 border border-zinc-300 dark:border-zinc-700/40 pl-7 pr-3 py-1 text-[11px] text-zinc-800 dark:text-zinc-300 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 outline-none focus:border-zinc-400 dark:focus:border-zinc-500 transition-colors"
                 />
                 {search && (
-                  <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3">
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                    aria-label="Clear log search"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3" aria-hidden="true">
                       <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
                     </svg>
                   </button>
@@ -958,24 +1098,112 @@ export default function SettingsPage() {
             </div>
           </>
         )}
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            DATA TAB
+            ═══════════════════════════════════════════════════════════════════ */}
+        {activeTab === "data" && (
+          <div className="space-y-6">
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 p-6">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Export Accounts</h2>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">Download all account data as a JSON file for backup or migration.</p>
+              <a
+                href="/api/accounts/export"
+                download
+                className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-4 py-2 text-xs font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                  <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
+                  <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
+                </svg>
+                Export JSON
+              </a>
+            </div>
+
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 p-6">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Import Accounts</h2>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">Upload a previously exported JSON file to restore or merge accounts.</p>
+              <input
+                ref={importFileRef}
+                type="file"
+                accept=".json"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setImporting(true);
+                  setImportResult(null);
+                  try {
+                    const text = await file.text();
+                    const data = JSON.parse(text);
+                    const res = await fetch("/api/accounts/import", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(data),
+                    });
+                    const result = await res.json();
+                    if (res.ok) {
+                      setImportResult(`Successfully imported ${result.imported} account(s).`);
+                    } else {
+                      setImportResult(`Error: ${result.error || "Unknown error"}`);
+                    }
+                  } catch {
+                    setImportResult("Error: Invalid JSON file.");
+                  } finally {
+                    setImporting(false);
+                    if (importFileRef.current) importFileRef.current.value = "";
+                  }
+                }}
+              />
+              <button
+                onClick={() => importFileRef.current?.click()}
+                disabled={importing}
+                className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-4 py-2 text-xs font-medium hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                  <path d="M9.25 13.25a.75.75 0 0 0 1.5 0V4.636l2.955 3.129a.75.75 0 0 0 1.09-1.03l-4.25-4.5a.75.75 0 0 0-1.09 0l-4.25 4.5a.75.75 0 1 0 1.09 1.03L9.25 4.636v8.614Z" />
+                  <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
+                </svg>
+                {importing ? "Importing…" : "Import JSON"}
+              </button>
+              {importResult && (
+                <p className={`mt-3 text-xs ${importResult.startsWith("Error") ? "text-red-500" : "text-emerald-500"}`}>
+                  {importResult}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Confirm clear dialog */}
       {confirmClear && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="rounded-2xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6 shadow-2xl w-full max-w-sm mx-4">
-            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Clear all logs?</h3>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setConfirmClear(false)}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="clear-logs-title"
+            className="rounded-2xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6 shadow-2xl w-full max-w-sm mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="clear-logs-title" className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Clear all logs?</h3>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-5">
               {stats?.total ?? 0} log entries will be permanently deleted.
             </p>
             <div className="flex gap-3 justify-end">
               <button
+                type="button"
                 onClick={() => setConfirmClear(false)}
                 className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleClear}
                 className="rounded-lg px-4 py-2 text-sm font-medium bg-red-500/15 text-red-500 dark:text-red-400 hover:bg-red-500/25 transition-colors"
               >
@@ -998,13 +1226,16 @@ function ToggleSwitch({ enabled, onToggle, small }: { enabled: boolean; onToggle
 
   return (
     <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
       onClick={onToggle}
-      className={`relative inline-flex ${size} items-center rounded-full transition-colors ${
+      className={`relative inline-flex shrink-0 ${size} items-center rounded-full transition-colors motion-reduce:transition-none ${
         enabled ? "bg-sky-500" : "bg-zinc-300 dark:bg-zinc-700"
       }`}
     >
       <span
-        className={`inline-block ${dotSize} rounded-full bg-white shadow-sm transition-transform ${translate}`}
+        className={`inline-block ${dotSize} rounded-full bg-white shadow-sm transition-transform motion-reduce:transition-none ${translate}`}
       />
     </button>
   );

@@ -21,9 +21,15 @@ export function ThemeToggle({ className }: { className?: string }) {
 
   const isDark = resolvedTheme === 'dark';
 
+  const handleToggle = () => {
+    document.documentElement.classList.add('theme-transition');
+    setTheme(isDark ? 'light' : 'dark');
+    setTimeout(() => document.documentElement.classList.remove('theme-transition'), 350);
+  };
+
   return (
     <button
-      onClick={() => setTheme(isDark ? 'light' : 'dark')}
+      onClick={handleToggle}
       className={`group relative flex items-center w-14 h-8 rounded-full p-1 cursor-pointer transition-colors duration-500 overflow-hidden border ${
         isDark
           ? "bg-slate-900 border-slate-700 hover:bg-sky-300 hover:border-sky-400"

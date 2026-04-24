@@ -4,6 +4,13 @@
  * Thin wrapper around the `codex app-server` subprocess.
  * Communicates via stdin/stdout JSON-RPC (newline-delimited JSON).
  *
+ * Important runtime policy:
+ * - Each app-server session runs in a temporary CODEX_HOME copied from the
+ *   account's persistent auth home so Codex runtime caches/logs do not bloat
+ *   the stored account directory.
+ * - Plugins are disabled because login + quota reads do not require them, and
+ *   plugin startup sync can create large temporary clone directories.
+ *
  * Supports two operations:
  *   1. login(codexHomePath)  — starts OAuth flow, opens browser, resolves when complete
  *   2. fetchQuota(codexHomePath) — reads live rate-limit data from the running account
@@ -13,6 +20,7 @@ import type { ChildProcessWithoutNullStreams } from "child_process";
 import { createInterface } from "readline";
 import type { QuotaData } from "@/types";
 import { getCodexBinaryPath } from "./codex-binary";
+import { createCodexRuntimeHome } from "./codex-runtime-home";
 
 // ─── JSON-RPC helpers ────────────────────────────────────────────────────────
 
@@ -30,24 +38,37 @@ interface AppServerSession {
   /** Async iterator of parsed messages from the server */
   messages: () => AsyncGenerator<RpcMessage>;
   kill: () => void;
+  waitForExit: () => Promise<void>;
+  persistAuth: () => void;
+  cleanupRuntimeHome: () => void;
 }
 
 async function spawnAppServer(codexHomePath: string): Promise<AppServerSession> {
   const { spawn } = await import("child_process");
   const bin = await getCodexBinaryPath();
+  const runtimeHome = createCodexRuntimeHome(codexHomePath);
   const env = {
     ...process.env,
-    CODEX_HOME: codexHomePath,
+    CODEX_HOME: runtimeHome.runtimeHomePath,
     // Disable the auto-update check so it doesn't stall
     CODEX_SKIP_UPDATE_CHECK: "1",
   };
 
-  const proc = spawn(/* turbopackIgnore: true */ bin, ["app-server"], {
-    env,
-    stdio: ["pipe", "pipe", "pipe"],
-  });
+  let proc: ChildProcessWithoutNullStreams;
+  try {
+    proc = spawn(/* turbopackIgnore: true */ bin, ["app-server", "--disable", "plugins"], {
+      env,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+  } catch (error) {
+    runtimeHome.cleanup();
+    throw error;
+  }
 
   const send = (msg: string) => proc.stdin.write(msg);
+  const exited = new Promise<void>((resolve) => {
+    proc.once("exit", () => resolve());
+  });
 
   async function* messages(): AsyncGenerator<RpcMessage> {
     const rl = createInterface({ input: proc.stdout, crlfDelay: Infinity });
@@ -67,7 +88,15 @@ async function spawnAppServer(codexHomePath: string): Promise<AppServerSession> 
     try { proc.kill("SIGTERM"); } catch { /* ignore */ }
   };
 
-  return { proc, send, messages, kill };
+  return {
+    proc,
+    send,
+    messages,
+    kill,
+    waitForExit: () => exited,
+    persistAuth: runtimeHome.persistAuth,
+    cleanupRuntimeHome: runtimeHome.cleanup,
+  };
 }
 
 // ─── Initialize handshake ────────────────────────────────────────────────────
@@ -89,6 +118,18 @@ async function initialize(
     if (msg.id === 1 && "result" in msg) return;
     if (msg.id === 1 && "error" in msg) throw new Error(`initialize failed: ${JSON.stringify(msg.error)}`);
   }
+}
+
+async function closeSession(session: AppServerSession, persistAuth = false): Promise<void> {
+  session.kill();
+  await Promise.race([
+    session.waitForExit(),
+    new Promise<void>((resolve) => setTimeout(resolve, 2_000)),
+  ]);
+  if (persistAuth) {
+    session.persistAuth();
+  }
+  session.cleanupRuntimeHome();
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -120,6 +161,7 @@ export async function loginAccount(
   session.proc.stderr.on("data", (d: Buffer) => stderrChunks.push(d.toString()));
 
   let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  let shouldPersistAuth = false;
 
   try {
     await initialize(session, msgGen);
@@ -166,6 +208,7 @@ export async function loginAccount(
     });
 
     const result = await Promise.race([loginResponsePromise, timeoutPromise]);
+    shouldPersistAuth = result.success;
     return result;
 
   } catch (err) {
@@ -175,7 +218,7 @@ export async function loginAccount(
     };
   } finally {
     if (timeoutHandle) clearTimeout(timeoutHandle);
-    session.kill();
+    await closeSession(session, shouldPersistAuth);
   }
 }
 
@@ -189,6 +232,7 @@ export async function fetchQuota(codexHomePath: string): Promise<QuotaData> {
 
   const stderrChunks: string[] = [];
   session.proc.stderr.on("data", (d: Buffer) => stderrChunks.push(d.toString()));
+  let shouldPersistAuth = false;
 
   try {
     await initialize(session, msgGen);
@@ -245,6 +289,7 @@ export async function fetchQuota(codexHomePath: string): Promise<QuotaData> {
       email = (nested?.email ?? ar.email) as string | undefined;
     }
 
+    shouldPersistAuth = true;
     return {
       fetchedAt: new Date().toISOString(),
       email,
@@ -254,7 +299,7 @@ export async function fetchQuota(codexHomePath: string): Promise<QuotaData> {
     };
 
   } finally {
-    session.kill();
+    await closeSession(session, shouldPersistAuth);
   }
 }
 
