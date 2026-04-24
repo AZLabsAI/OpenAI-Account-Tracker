@@ -154,7 +154,7 @@ function QuotaWindow({ slot, label, window: w, buckets, loading, accountId, spar
 // ─── Bucket builders ─────────────────────────────────────────────────────────
 
 function buildHourlyBuckets(history: QuotaHistoryItem[], now: Date, count: number): Bucket[] {
-  return Array.from({ length: count }, (_, i) => {
+  const raw: Bucket[] = Array.from({ length: count }, (_, i) => {
     const end = new Date(now.getTime() - i * 3_600_000);
     const start = new Date(now.getTime() - (i + 1) * 3_600_000);
     const snap = history.find(s =>
@@ -165,10 +165,11 @@ function buildHourlyBuckets(history: QuotaHistoryItem[], now: Date, count: numbe
     const h = end.getHours(), h12 = h % 12 || 12;
     return { label: `${h12}:00 ${h >= 12 ? "PM" : "AM"}`, remaining: snap?.primaryPct ?? null };
   }).reverse();
+  return forwardFill(raw);
 }
 
 function buildDailyBuckets(history: QuotaHistoryItem[], now: Date, count: number): Bucket[] {
-  return Array.from({ length: count }, (_, i) => {
+  const raw: Bucket[] = Array.from({ length: count }, (_, i) => {
     const start = new Date(now.getTime() - i * 86_400_000);
     start.setHours(0, 0, 0, 0);
     const end = new Date(start.getTime() + 86_400_000);
@@ -182,6 +183,39 @@ function buildDailyBuckets(history: QuotaHistoryItem[], now: Date, count: number
       remaining: snap?.weeklyPct ?? null,
     };
   }).reverse();
+  return forwardFill(raw);
+}
+
+// Fill gaps between measured samples by carrying the last observation forward.
+// Skip gaps that straddle a quota reset (detected as a jump ≥ 10pp upward to the
+// next known sample) — those are real discontinuities, not missing data.
+// Leading gaps (before the first measurement) stay null: we have no data there.
+function forwardFill(buckets: Bucket[]): Bucket[] {
+  const RESET_JUMP_PP = 10;
+  // Precompute the index of the next measured bucket for each position.
+  const nextKnown: number[] = new Array(buckets.length).fill(-1);
+  for (let i = buckets.length - 1, nk = -1; i >= 0; i--) {
+    if (buckets[i].remaining != null) nk = i;
+    nextKnown[i] = nk;
+  }
+
+  const out: Bucket[] = [];
+  let last: number | null = null;
+  for (let i = 0; i < buckets.length; i++) {
+    const b = buckets[i];
+    if (b.remaining != null) {
+      last = b.remaining;
+      out.push(b);
+      continue;
+    }
+    if (last == null) { out.push(b); continue; } // no prior sample yet
+    const nk = nextKnown[i];
+    const next = nk >= 0 ? buckets[nk].remaining! : null;
+    const resetAhead = next != null && next - last >= RESET_JUMP_PP;
+    if (resetAhead) { out.push(b); continue; } // don't interpolate across a reset
+    out.push({ ...b, remaining: last, interpolated: true });
+  }
+  return out;
 }
 
 // ─── Trend (linear regression on last 5 filled) ─────────────────────────────

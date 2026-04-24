@@ -45,3 +45,5 @@ data.db
 data.db-shm
 data.db-wal
 QuotaManager
+.omx/
+.firecrawl/

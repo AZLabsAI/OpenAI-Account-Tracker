@@ -5,7 +5,7 @@
 **A local-first dashboard for managing multiple OpenAI accounts.**\
 Track subscriptions, live usage quotas, expiration dates, and agent assignments — all from one place.
 
-[![Version](https://img.shields.io/badge/version-0.0.3--beta-blue?style=flat-square)](https://github.com/AZLabsAI/OpenAI-Account-Tracker/releases)
+[![Version](https://img.shields.io/badge/version-0.0.4--beta-blue?style=flat-square)](https://github.com/AZLabsAI/OpenAI-Account-Tracker/releases)
 [![Next.js](https://img.shields.io/badge/Next.js-16.2.0-black?style=flat-square&logo=next.js)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://typescriptlang.org)
 [![SQLite](https://img.shields.io/badge/SQLite-local--first-003B57?style=flat-square&logo=sqlite&logoColor=white)](https://sqlite.org)
@@ -167,6 +167,12 @@ This dashboard is intended for **trusted environments**. Do not expose the API t
 
 ## Release Notes
 
+### 0.0.4-beta
+- Adds a per-account quota-history sparkline under each live balance (24 hourly buckets for the 5-hour window, 14 daily buckets for the weekly window).
+- Three configurable sparkline styles — Bars (default), Wave, Dots — switchable from Settings.
+- Interactive hover with tooltip and trend indicator (Recovering / Depleting / Stable).
+- Forward-fills missing buckets between measurements so idle periods render continuously, with a dimmer style and `est.` tooltip flag to keep estimated samples honest; resets are preserved as real discontinuities.
+
 ### 0.0.3-beta
 - Fixes Codex account-home disk bloat caused by leaked plugin clone temp directories.
 - Moves app-server sessions to temporary scratch `CODEX_HOME` directories while keeping account auth persistent.
@@ -177,7 +183,6 @@ This dashboard is intended for **trusted environments**. Do not expose the API t
 - [ ] Export/import accounts (JSON backup)
 - [ ] Multi-device sync via CRDTs or file-based replication
 - [ ] Account grouping / workspaces
-- [ ] Usage history charts (daily/weekly trends)
 - [ ] Notification alerts when quota drops below threshold
 - [ ] Browser extension for quick-check from any tab
 
@@ -206,7 +211,7 @@ MIT — see [LICENSE](LICENSE) for details.
 
 ---
 
-**v0.0.3 Beta** · Made with care by [AZ Labs](https://azlabs.co.za)
+**v0.0.4 Beta** · Made with care by [AZ Labs](https://azlabs.co.za)
 
 <sub>If this is useful, consider giving it a star</sub>
 

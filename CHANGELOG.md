@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.4-beta] - 2026-04-24
+
+### Added
+- Per-account quota-history sparkline rendered under each live balance (24 hourly buckets for the 5-hour window, 14 daily buckets for the weekly window).
+- Three sparkline styles — Bars (default), Wave, Dots — switchable in Settings.
+- Interactive hover tooltip with timestamp + remaining %, and a per-window trend indicator (Recovering / Depleting / Stable) derived from a linear regression over the last 5 filled buckets.
+- `/api/accounts/[id]/history` endpoint backed by a `quota_history` table.
+
+### Fixed
+- Sparklines no longer show false gaps during idle periods. Buckets between two measured samples are now forward-filled from the last observation and rendered at reduced opacity with an `est.` tooltip flag. Resets (detected as a ≥10pp upward jump) are preserved as real discontinuities, and leading gaps before the first measurement remain null.
+
+### Internal
+- Added `.firecrawl/` to `.gitignore`.
+- Bumped app version to `0.0.4-beta` in package metadata, docs, and footer display.
+
 ## [0.0.3-beta] - 2026-04-06
 
 ### Fixed

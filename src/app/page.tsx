@@ -37,7 +37,7 @@ const FILTERS: { key: Filter; label: string }[] = [
 ];
 
 /** Keep in sync with `package.json` version */
-const APP_VERSION = "0.0.3-beta";
+const APP_VERSION = "0.0.4-beta";
 
 const SPIN_DECAY_MS = 7000;
 const SPIN_LEVEL_MAX = 10;

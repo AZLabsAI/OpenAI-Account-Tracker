@@ -17,6 +17,7 @@ import type { SparklineStyle } from "@/types";
 export interface Bucket {
   label: string;
   remaining: number | null;
+  interpolated?: boolean;
 }
 
 interface Props {
@@ -60,7 +61,10 @@ function Tip({ bucket, leftPct, color }: { bucket: Bucket; leftPct: number; colo
       <div className="rounded-lg bg-zinc-900 border border-zinc-600/50 px-2.5 py-1.5 shadow-xl text-center whitespace-nowrap">
         <span className="text-[10px] text-zinc-400">{bucket.label}</span>
         {bucket.remaining != null ? (
-          <span className="text-[12px] font-bold tabular-nums ml-1.5" style={{ color }}>{Math.round(bucket.remaining)}%</span>
+          <span className="text-[12px] font-bold tabular-nums ml-1.5" style={{ color }}>
+            {bucket.interpolated ? "~" : ""}{Math.round(bucket.remaining)}%
+            {bucket.interpolated && <span className="text-[9px] font-normal text-zinc-500 ml-1">est.</span>}
+          </span>
         ) : (
           <span className="text-[10px] text-zinc-600 ml-1.5">—</span>
         )}
@@ -110,12 +114,13 @@ function BarsSparkline({ buckets }: Omit<Props, "style">) {
           }
           const r = Math.max(0, Math.min(100, b.remaining));
           const c = hue(r);
+          const baseOpacity = b.interpolated ? 0.32 : 0.65;
           return (
             <div key={i} className="flex-1 rounded-t-[2px] transition-all duration-100"
               style={{
                 height: `${Math.max(8, r)}%`,
                 backgroundColor: c,
-                opacity: active ? 1 : 0.65,
+                opacity: active ? 1 : baseOpacity,
                 filter: active ? "brightness(1.2)" : undefined,
                 boxShadow: active ? `0 0 8px ${c}40` : undefined,
               }} />
@@ -235,17 +240,22 @@ function DotsSparkline({ buckets, remainingPct, gradientId: id }: Omit<Props, "s
       {/* CSS-positioned dots (avoids SVG distortion from preserveAspectRatio=none) */}
       {points.map(p => {
         const active = hovered === p.i;
+        const est = buckets[p.i]?.interpolated;
         return (
           <div key={p.i} className="absolute pointer-events-none transition-all duration-100"
             style={{
               left: `${(p.i / (buckets.length - 1)) * 100}%`,
               top: `${((100 - p.remaining) / 100) * H}px`,
               transform: "translate(-50%,-50%)",
-              width: active ? "9px" : "5px", height: active ? "9px" : "5px",
-              borderRadius: "50%", backgroundColor: color,
-              opacity: active ? 1 : 0.75,
+              width: active ? "9px" : est ? "4px" : "5px",
+              height: active ? "9px" : est ? "4px" : "5px",
+              borderRadius: "50%",
+              backgroundColor: est && !active ? "transparent" : color,
+              opacity: active ? 1 : est ? 0.45 : 0.75,
               boxShadow: active ? `0 0 6px ${color}60` : undefined,
-              border: active ? "1.5px solid rgba(255,255,255,0.9)" : "1px solid rgba(0,0,0,0.3)",
+              border: active
+                ? "1.5px solid rgba(255,255,255,0.9)"
+                : est ? `1px solid ${color}` : "1px solid rgba(0,0,0,0.3)",
             }} />
         );
       })}

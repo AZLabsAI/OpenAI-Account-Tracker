@@ -93,7 +93,7 @@ openai-account-tracker/
 │       └── index.ts            # Re-export
 │
 ├── data.db                     # SQLite database (gitignored runtime data)
-├── package.json                # v0.0.3-beta
+├── package.json                # v0.0.4-beta
 ├── vitest.config.ts            # Test config
 └── AGENTS.md                   # Agent memory file
 ```
@@ -546,7 +546,7 @@ Run with: `pnpm test`
 - **Deployed on Vercel** — every PR creates a preview deployment
 - **Never push directly to `main`** — always feature branch → PR → squash merge + delete branch
 - **Branch naming**: `feat/`, `fix/`, `chore/` prefixes
-- **Version**: `0.0.3-beta` (displayed in the footer)
+- **Version**: `0.0.4-beta` (displayed in the footer)
 - **GitHub**: `AZLabsAI/OpenAI-Account-Tracker`
 
 ---
