@@ -52,7 +52,7 @@ describe("QuotaBar", () => {
   it("uses natural same-day wording for 5-hour resets", () => {
     const markup = renderQuotaBar(makeQuotaData());
 
-    expect(markup).toContain("Resets tonight at 10:07 PM");
+    expect(markup).toContain("Resets tonight at 10:07 PM (in ~4h 7m)");
   });
 
   it("uses natural tomorrow wording with a day-part and absolute time", () => {
@@ -120,6 +120,33 @@ describe("QuotaBar", () => {
 
     expect(markup).toContain("60%");
     expect(markup).toContain("Reset time unavailable");
+  });
+
+  it("shows countdown for resets less than 1 minute away", () => {
+    vi.setSystemTime(new Date("2026-04-08T20:06:45.000Z"));
+    const markup = renderQuotaBar(makeQuotaData());
+
+    expect(markup).toContain("Resets tonight at 10:07 PM (in under a minute)");
+  });
+
+  it("shows countdown in minutes for resets within an hour", () => {
+    vi.setSystemTime(new Date("2026-04-08T19:30:00.000Z"));
+    const markup = renderQuotaBar(makeQuotaData());
+
+    expect(markup).toContain("Resets tonight at 10:07 PM (in ~37m)");
+  });
+
+  it("shows countdown in hours and minutes for resets several hours away", () => {
+    vi.setSystemTime(new Date("2026-04-08T12:00:00.000Z"));
+    const markup = renderQuotaBar(makeQuotaData());
+
+    expect(markup).toContain("Resets tonight at 10:07 PM (in ~8h 7m)");
+  });
+
+  it("shows countdown in days for resets multiple days away", () => {
+    const markup = renderQuotaBar(makeQuotaData());
+
+    expect(markup).toContain("Resets in 7 days on Wed, Apr 15 · 6:13 PM (in ~7d)");
   });
 
   it("labels a weekly-only primary window as weekly based on duration", () => {
