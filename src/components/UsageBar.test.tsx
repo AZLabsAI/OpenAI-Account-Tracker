@@ -28,10 +28,27 @@ describe("QuotaBar", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-08T16:00:00.000Z"));
+    // Mock Intl.DateTimeFormat to always use Africa/Johannesburg timezone
+    const originalIntl = globalThis.Intl;
+    const mockIntl = {
+      ...originalIntl,
+      DateTimeFormat: function MockDateTimeFormat(locale?: string | string[], options?: any) {
+        return new originalIntl.DateTimeFormat(locale, {
+          ...options,
+          timeZone: options?.timeZone || "Africa/Johannesburg",
+        });
+      },
+    };
+    Object.defineProperty(globalThis, "Intl", {
+      value: mockIntl,
+      writable: true,
+      configurable: true,
+    });
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it("renders balance-first live quota copy with remaining widths", () => {
