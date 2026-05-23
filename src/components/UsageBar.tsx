@@ -114,7 +114,7 @@ function QuotaWindow({ slot, label, window: w, buckets, loading, accountId, spar
   const trend = useMemo(() => getTrend(buckets), [buckets]);
   const t = TREND_META[trend];
   const filled = buckets.filter(b => b.remaining != null).length;
-  const resetsLabel = formatResetLabel(w.resetsAt);
+  const resetsLabel = formatResetLabel(w.resetsAt, undefined);
 
   return (
     <div className="space-y-1">
@@ -267,12 +267,12 @@ function quotaLabelFor(w: NonNullable<QuotaData["primary"]>, slot: "primary" | "
 
 // ─── Reset label formatting ──────────────────────────────────────────────────
 
-function formatResetLabel(resetsAt: number | null): string | null {
+function formatResetLabel(resetsAt: number | null, tz?: string): string | null {
   if (!resetsAt) return null;
 
-  const tz = "Africa/Johannesburg";
-  const reset = getDateTimeParts(new Date(resetsAt * 1000), tz);
-  const today = getDateTimeParts(new Date(), tz);
+  const timezone = tz ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const reset = getDateTimeParts(new Date(resetsAt * 1000), timezone);
+  const today = getDateTimeParts(new Date(), timezone);
   const days = Math.max(0, calendarDayDiff(today, reset));
   const time = `${reset.hour}:${reset.minute} ${reset.dayPeriod}`;
   const full = `${reset.weekday}, ${reset.month} ${reset.day} · ${time}`;
