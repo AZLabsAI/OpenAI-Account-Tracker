@@ -267,6 +267,16 @@ function quotaLabelFor(w: NonNullable<QuotaData["primary"]>, slot: "primary" | "
 
 // ─── Reset label formatting ──────────────────────────────────────────────────
 
+function getUserTimezone(): string {
+  try {
+    // Try to get the user's timezone from their browser
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    // Fallback to UTC if detection fails
+    return "UTC";
+  }
+}
+
 function formatTimeUntilReset(resetsAt: number | null, now: Date = new Date()): string | null {
   if (!resetsAt) return null;
 
@@ -299,12 +309,13 @@ function formatTimeUntilReset(resetsAt: number | null, now: Date = new Date()): 
 function formatResetLabel(resetsAt: number | null): string | null {
   if (!resetsAt) return null;
 
-  const tz = "Africa/Johannesburg";
+  const tz = getUserTimezone();
   const reset = getDateTimeParts(new Date(resetsAt * 1000), tz);
   const today = getDateTimeParts(new Date(), tz);
   const days = Math.max(0, calendarDayDiff(today, reset));
   const time = `${reset.hour}:${reset.minute} ${reset.dayPeriod}`;
-  const full = `${reset.weekday}, ${reset.month} ${reset.day} · ${time}`;
+  const tzLabel = reset.tzAbbrev ? ` ${reset.tzAbbrev}` : "";
+  const full = `${reset.weekday}, ${reset.month} ${reset.day} · ${time}${tzLabel}`;
   const part = dayPart(reset.hour24);
 
   let label: string;
@@ -319,17 +330,21 @@ function formatResetLabel(resetsAt: number | null): string | null {
 function getDateTimeParts(date: Date, tz: string) {
   const fmt = new Intl.DateTimeFormat("en-US", {
     timeZone: tz, weekday: "short", month: "short", day: "numeric", year: "numeric",
-    hour: "numeric", minute: "2-digit", hour12: true,
+    hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "short" as const,
   });
   const p = fmt.formatToParts(date);
   const g = (t: string) => p.find(x => x.type === t)?.value ?? "";
   const hour24 = Number(new Intl.DateTimeFormat("en-US", {
     timeZone: tz, hour: "2-digit", hourCycle: "h23",
   }).formatToParts(date).find(x => x.type === "hour")?.value);
+  let tzAbbrev = g("timeZoneName");
+  if (tz === "Africa/Johannesburg" && tzAbbrev === "GMT+2") {
+    tzAbbrev = "SAST";
+  }
   return {
     year: Number(g("year")), month: g("month"), day: Number(g("day")),
     weekday: g("weekday"), hour: g("hour"), minute: g("minute"),
-    dayPeriod: g("dayPeriod"), hour24,
+    dayPeriod: g("dayPeriod"), hour24, tzAbbrev,
   };
 }
 
