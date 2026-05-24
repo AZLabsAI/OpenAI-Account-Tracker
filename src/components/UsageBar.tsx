@@ -267,36 +267,84 @@ function quotaLabelFor(w: NonNullable<QuotaData["primary"]>, slot: "primary" | "
 
 // ─── Reset label formatting ──────────────────────────────────────────────────
 
+function getUserTimezone(): string {
+  try {
+    // Try to get the user's timezone from their browser
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    // Fallback to UTC if detection fails
+    return "UTC";
+  }
+}
+
+function formatTimeUntilReset(resetsAt: number | null, now: Date = new Date()): string | null {
+  if (!resetsAt) return null;
+
+  const resetTime = new Date(resetsAt * 1000);
+  const nowTime = now.getTime();
+  const resetMs = resetTime.getTime();
+
+  if (resetMs <= nowTime) return null;
+
+  const remainingMs = resetMs - nowTime;
+  const totalSeconds = Math.round(remainingMs / 1000);
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const totalHours = Math.floor(totalMinutes / 60);
+  const totalDays = Math.floor(totalHours / 24);
+
+  if (totalMinutes < 1) return "in under a minute";
+  if (totalMinutes < 60) return `in ~${totalMinutes}m`;
+  if (totalHours < 24) {
+    const mins = totalMinutes % 60;
+    return mins > 0 ? `in ~${totalHours}h ${mins}m` : `in ~${totalHours}h`;
+  }
+
+  const hours = totalHours % 24;
+  if (hours > 0) {
+    return `in ~${totalDays}d ${hours}h`;
+  }
+  return `in ~${totalDays}d`;
+}
+
 function formatResetLabel(resetsAt: number | null): string | null {
   if (!resetsAt) return null;
 
-  const tz = "Africa/Johannesburg";
+  const tz = getUserTimezone();
   const reset = getDateTimeParts(new Date(resetsAt * 1000), tz);
   const today = getDateTimeParts(new Date(), tz);
   const days = Math.max(0, calendarDayDiff(today, reset));
   const time = `${reset.hour}:${reset.minute} ${reset.dayPeriod}`;
-  const full = `${reset.weekday}, ${reset.month} ${reset.day} · ${time}`;
+  const tzLabel = reset.tzAbbrev ? ` ${reset.tzAbbrev}` : "";
+  const full = `${reset.weekday}, ${reset.month} ${reset.day} · ${time}${tzLabel}`;
   const part = dayPart(reset.hour24);
 
-  if (days === 0) return part === "tonight" ? `tonight at ${time}` : `this ${part} at ${time}`;
-  if (days === 1) return part === "tonight" ? `tomorrow night on ${full}` : `tomorrow ${part} on ${full}`;
-  return `in ${days} day${days === 1 ? "" : "s"} on ${full}`;
+  let label: string;
+  if (days === 0) label = part === "tonight" ? `tonight at ${time}` : `this ${part} at ${time}`;
+  else if (days === 1) label = part === "tonight" ? `tomorrow night on ${full}` : `tomorrow ${part} on ${full}`;
+  else label = `in ${days} day${days === 1 ? "" : "s"} on ${full}`;
+
+  const countdown = formatTimeUntilReset(resetsAt);
+  return countdown ? `${label} (${countdown})` : label;
 }
 
 function getDateTimeParts(date: Date, tz: string) {
   const fmt = new Intl.DateTimeFormat("en-US", {
     timeZone: tz, weekday: "short", month: "short", day: "numeric", year: "numeric",
-    hour: "numeric", minute: "2-digit", hour12: true,
+    hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "short" as const,
   });
   const p = fmt.formatToParts(date);
   const g = (t: string) => p.find(x => x.type === t)?.value ?? "";
   const hour24 = Number(new Intl.DateTimeFormat("en-US", {
     timeZone: tz, hour: "2-digit", hourCycle: "h23",
   }).formatToParts(date).find(x => x.type === "hour")?.value);
+  let tzAbbrev = g("timeZoneName");
+  if (tz === "Africa/Johannesburg" && tzAbbrev === "GMT+2") {
+    tzAbbrev = "SAST";
+  }
   return {
     year: Number(g("year")), month: g("month"), day: Number(g("day")),
     weekday: g("weekday"), hour: g("hour"), minute: g("minute"),
-    dayPeriod: g("dayPeriod"), hour24,
+    dayPeriod: g("dayPeriod"), hour24, tzAbbrev,
   };
 }
 

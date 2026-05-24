@@ -28,10 +28,23 @@ describe("QuotaBar", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-08T16:00:00.000Z"));
+    // Mock Intl.DateTimeFormat to return Africa/Johannesburg timezone for consistent test output
+    const originalIntl = global.Intl;
+    const mockIntl = {
+      ...originalIntl,
+      DateTimeFormat: function(locale?: string | string[], options?: any) {
+        // Force Africa/Johannesburg timezone in tests
+        const testOptions = { ...options, timeZone: "Africa/Johannesburg" };
+        return new originalIntl.DateTimeFormat(locale, testOptions);
+      }
+    };
+    global.Intl = mockIntl as any;
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    // Restore original Intl
+    delete (global as any).Intl;
   });
 
   it("renders balance-first live quota copy with remaining widths", () => {
@@ -45,14 +58,14 @@ describe("QuotaBar", () => {
     expect(markup).toContain("remaining");
     expect(markup).toContain("width:77%");
     expect(markup).toContain("width:62%");
-    expect(markup).toContain("Resets in 7 days on Wed, Apr 15 · 6:13 PM");
+    expect(markup).toContain("Resets in 7 days on Wed, Apr 15 · 6:13 PM SAST");
     expect(markup).not.toContain("% used");
   });
 
   it("uses natural same-day wording for 5-hour resets", () => {
     const markup = renderQuotaBar(makeQuotaData());
 
-    expect(markup).toContain("Resets tonight at 10:07 PM");
+    expect(markup).toContain("Resets tonight at 10:07 PM (in ~4h 7m)");
   });
 
   it("uses natural tomorrow wording with a day-part and absolute time", () => {
@@ -66,7 +79,7 @@ describe("QuotaBar", () => {
       }),
     );
 
-    expect(markup).toContain("Resets tomorrow evening on Thu, Apr 9 · 6:13 PM");
+    expect(markup).toContain("Resets tomorrow evening on Thu, Apr 9 · 6:13 PM SAST");
   });
 
   it("uses this-afternoon wording for same-day daytime resets", () => {
@@ -122,6 +135,33 @@ describe("QuotaBar", () => {
     expect(markup).toContain("Reset time unavailable");
   });
 
+  it("shows countdown for resets less than 1 minute away", () => {
+    vi.setSystemTime(new Date("2026-04-08T20:06:45.000Z"));
+    const markup = renderQuotaBar(makeQuotaData());
+
+    expect(markup).toContain("Resets tonight at 10:07 PM (in under a minute)");
+  });
+
+  it("shows countdown in minutes for resets within an hour", () => {
+    vi.setSystemTime(new Date("2026-04-08T19:30:00.000Z"));
+    const markup = renderQuotaBar(makeQuotaData());
+
+    expect(markup).toContain("Resets tonight at 10:07 PM (in ~37m)");
+  });
+
+  it("shows countdown in hours and minutes for resets several hours away", () => {
+    vi.setSystemTime(new Date("2026-04-08T12:00:00.000Z"));
+    const markup = renderQuotaBar(makeQuotaData());
+
+    expect(markup).toContain("Resets tonight at 10:07 PM (in ~8h 7m)");
+  });
+
+  it("shows countdown in days for resets multiple days away", () => {
+    const markup = renderQuotaBar(makeQuotaData());
+
+    expect(markup).toContain("Resets in 7 days on Wed, Apr 15 · 6:13 PM SAST (in ~7d)");
+  });
+
   it("labels a weekly-only primary window as weekly based on duration", () => {
     const markup = renderQuotaBar(
       makeQuotaData({
@@ -137,7 +177,7 @@ describe("QuotaBar", () => {
     expect(markup).toContain("Weekly usage limit");
     expect(markup).not.toContain("5 hour usage limit");
     expect(markup).toContain("62%");
-    expect(markup).toContain("Resets in 7 days on Wed, Apr 15 · 6:13 PM");
+    expect(markup).toContain("Resets in 7 days on Wed, Apr 15 · 6:13 PM SAST");
   });
 
   it("falls back to the primary slot label when duration is unavailable", () => {
@@ -154,5 +194,27 @@ describe("QuotaBar", () => {
 
     expect(markup).toContain("5 hour usage limit");
     expect(markup).toContain("60%");
+  });
+
+  it("displays timezone abbreviation (SAST) to clarify the displayed reset time is not in user's local timezone", () => {
+    // User reported: display shows "3:29 AM" but countdown shows "~5h"
+    // This confused them because they're in California (UTC-7) thinking 3:29 AM is local
+    // By adding SAST abbreviation, it clarifies the time is in Africa/Johannesburg (UTC+2)
+    // 3:29 AM SAST = 1:29 AM UTC
+    // From 8:29 PM UTC to 1:29 AM UTC next day = ~5 hours ✓
+    vi.setSystemTime(new Date("2026-05-23T20:29:00.000Z")); // 8:29 PM UTC = 1:29 PM California
+    const markup = renderQuotaBar(
+      makeQuotaData({
+        primary: {
+          usedPercent: 10,
+          resetsAt: Math.floor(new Date("2026-05-24T01:29:00.000Z").getTime() / 1000), // 1:29 AM UTC = 3:29 AM SAST
+          windowDurationSecs: 18_000,
+        },
+        secondary: null,
+      }),
+    );
+
+    expect(markup).toContain("3:29 AM SAST");
+    expect(markup).toContain("in ~5h");
   });
 });
