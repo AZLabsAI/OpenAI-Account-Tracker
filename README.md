@@ -1,3 +1,5 @@
+
+
 <div align="center">
 
 # <img src="https://upload.wikimedia.org/wikipedia/commons/0/04/ChatGPT_logo.svg" width="28" /> OpenAI Account Tracker
@@ -94,7 +96,7 @@ To see real-time usage bars, you need the [Codex CLI](https://github.com/openai/
 
 ```bash
 # Install Codex CLI (if you haven't)
-npm install -g @openai/codex
+pnpm add -g @openai/codex
 ```
 
 Then click **Sign In** on any card → a browser window opens for OAuth → done.\
